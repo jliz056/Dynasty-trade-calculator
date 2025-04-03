@@ -15,12 +15,11 @@ const API_URL = 'http://localhost:5000/api';
 
 // Create an instance for internal API calls
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: import.meta.env.VITE_API_URL,
+  timeout: 10000,
   headers: {
-    'Content-Type': 'application/json',
-  },
-  timeout: 10000, // 10 second timeout
-  timeoutErrorMessage: 'Request timed out. Please try again.',
+    'Content-Type': 'application/json'
+  }
 });
 
 // Create an instance for external API calls (no baseURL)
@@ -29,17 +28,29 @@ export const externalApi = axios.create({
     'Content-Type': 'application/json',
   },
   timeout: 10000,
-  timeoutErrorMessage: 'Request timed out. Please try again.',
 });
 
-// Add token to requests if it exists (only for internal API)
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token && config.headers) {
-    config.headers.Authorization = `Bearer ${token}`;
+// Add request interceptor
+api.interceptors.request.use(
+  (config) => {
+    // You can add auth token here if needed
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-  return config;
-});
+);
+
+// Add response interceptor
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.code === 'ECONNABORTED') {
+      return Promise.reject(new Error('Request timed out'));
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Add response interceptor for error handling (for both instances)
 const errorInterceptor = async (error: any) => {
@@ -55,11 +66,6 @@ const errorInterceptor = async (error: any) => {
 
   throw error;
 };
-
-api.interceptors.response.use(
-  (response) => response,
-  errorInterceptor
-);
 
 externalApi.interceptors.response.use(
   (response) => response,

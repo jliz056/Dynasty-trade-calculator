@@ -25,8 +25,7 @@ import {
   Button,
   Tab,
   Tabs,
-  IconButton,
-  Tooltip
+  IconButton
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';

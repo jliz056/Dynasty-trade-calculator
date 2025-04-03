@@ -18,11 +18,7 @@ import {
   TableHead,
   TableRow,
   Chip,
-  Avatar,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemAvatar
+  Avatar
 } from '@mui/material';
 import { getUserTrades, Trade } from '../services/trade';
 import { fetchSleeperPlayers } from '../services/player';

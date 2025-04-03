@@ -23,13 +23,30 @@ import {
   DialogActions,
   Button,
   Alert,
-  LinearProgress
+  LinearProgress,
+  TextField,
+  MenuItem,
+  Select,
+  FormControl,
+  InputLabel,
+  Collapse,
+  Stack
 } from '@mui/material';
-import CloseIcon from '@mui/icons-material/Close';
+import {
+  Close as CloseIcon,
+  ExpandMore as ExpandMoreIcon,
+  ExpandLess as ExpandLessIcon,
+  Edit as EditIcon,
+  Save as SaveIcon,
+  Cancel as CancelIcon,
+  Add as AddIcon,
+  Remove as RemoveIcon,
+  Info as InfoIcon
+} from '@mui/icons-material';
 import { getPlayerById, PlayerData } from '../services/player';
-import { getPlayerCollegeStats } from '../services/collegeFootball';
 import { getPlayerSleeperStats, getPlayerStats } from '../services/sleeper';
 import { fetchPlayerStats } from '../services/nflApi';
+import { Player } from '../types/player';
 
 interface TabPanelProps {
   children?: React.ReactNode;
@@ -135,6 +152,10 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
   const [error, setError] = useState<string | null>(null);
   const [collegeStats, setCollegeStats] = useState<any[]>([]);
   const [sleeperStats, setSleeperStats] = useState<any[]>([]);
+  const [expanded, setExpanded] = useState<string | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editedPlayer, setEditedPlayer] = useState<Player | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
     if (open && playerId) {

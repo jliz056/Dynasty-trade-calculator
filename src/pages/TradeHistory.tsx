@@ -23,7 +23,7 @@ import {
   Tabs,
   Tab
 } from '@mui/material';
-import { getUserTrades, deleteTrade, getPublicTrades, updateTrade, Trade } from '../services/trade';
+import { getUserTrades, deleteTrade, getPublicTrades, updateTrade, saveTrade, Trade } from '../services/trade';
 import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
@@ -42,6 +42,23 @@ const TradeHistory = () => {
   const [editLeagueName, setEditLeagueName] = useState('');
   const [editIsPublic, setEditIsPublic] = useState(false);
   const [currentTab, setCurrentTab] = useState(0);
+  const [newTrade, setNewTrade] = useState<Trade>({
+    title: '',
+    isPublic: false,
+    league: {
+      name: '',
+      scoring: 'PPR',
+      format: '1QB',
+      size: 12
+    },
+    sideA: { players: [], picks: [] },
+    sideB: { players: [], picks: [] },
+    totalValueA: 0,
+    totalValueB: 0,
+    createdAt: new Date()
+  });
+  const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -119,6 +136,48 @@ const TradeHistory = () => {
 
   const handleTabChange = (_event: React.SyntheticEvent, newValue: number) => {
     setCurrentTab(newValue);
+  };
+
+  const handleSaveTrade = async () => {
+    if (!newTrade.title.trim()) {
+      setError('Please enter a title for the trade');
+      return;
+    }
+
+    try {
+      const tradeToSave: Trade = {
+        ...newTrade,
+        league: {
+          name: newTrade.league.name,
+          scoring: newTrade.league.scoring || 'PPR', // Provide default value
+          format: newTrade.league.format || '1QB', // Provide default value
+          size: newTrade.league.size || 12 // Provide default value
+        },
+        userId: auth.currentUser?.uid || 'anonymous', // Use actual user ID if available
+        createdAt: new Date()
+      };
+
+      const savedTrade = await saveTrade(tradeToSave);
+      setTrades(prevTrades => [...prevTrades, savedTrade]);
+      setSuccess('Trade saved successfully!');
+      setNewTrade({
+        title: '',
+        isPublic: false,
+        league: {
+          name: '',
+          scoring: 'PPR',
+          format: '1QB',
+          size: 12
+        },
+        sideA: { players: [], picks: [] },
+        sideB: { players: [], picks: [] },
+        totalValueA: 0,
+        totalValueB: 0,
+        createdAt: new Date()
+      });
+    } catch (error) {
+      setError('Failed to save trade');
+    }
   };
 
   if (loading) {

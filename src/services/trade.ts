@@ -45,9 +45,9 @@ export interface Trade {
   isPublic: boolean;
   league?: {
     name: string;
-    scoring: string;
-    format: string;
-    size: number;
+    scoring?: string;
+    format?: string;
+    size?: number;
   };
 }
 

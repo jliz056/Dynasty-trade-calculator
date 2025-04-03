@@ -32,14 +32,13 @@ import {
   Autocomplete,
 } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
-import AddIcon from '@mui/icons-material/Add';
 import SaveIcon from '@mui/icons-material/Save';
 import ShareIcon from '@mui/icons-material/Share';
 import HistoryIcon from '@mui/icons-material/History';
 import InfoIcon from '@mui/icons-material/Info';
 import PlayerDetails from './PlayerDetails';
-import { saveTrade, getUserTrades, getPublicTrades, Trade as TradeInterface, Player as TradePlayer } from '../services/trade';
-import { getPlayers, getPlayerById, getPlayerValues, getPickValues, searchPlayers, type PlayerData } from '../services/player';
+import { saveTrade, getUserTrades, getPublicTrades, Trade as TradeInterface } from '../services/trade';
+import { getPlayerValues, getPickValues, searchPlayers, type PlayerData } from '../services/player';
 
 interface PlayerStats {
   position: string;
@@ -71,6 +70,14 @@ interface TradeSide {
 interface InputState {
   playerName: string;
   pick: string;
+}
+
+interface PlayerValuesResponse {
+  [key: string]: number;
+}
+
+interface PickValuesResponse {
+  [key: string]: number;
 }
 
 // Function to fetch player values from API
@@ -145,8 +152,8 @@ const TradeCalculator = () => {
   });
   
   // New state variables for API integration
-  const [playerValues, setPlayerValues] = useState<Record<string, number>>({});
-  const [pickValues, setPickValues] = useState<Record<string, number>>({});
+  const [playerValues, setPlayerValues] = useState<PlayerValuesResponse>({});
+  const [pickValues, setPickValues] = useState<PickValuesResponse>({});
   const [isLoading, setIsLoading] = useState(false);
   const [searchResults, setSearchResults] = useState<PlayerData[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
