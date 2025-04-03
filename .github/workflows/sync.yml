@@ -1,0 +1,13 @@
+name: Sync NFL Stats
+
+on:
+  schedule:
+    - cron: '0 3 * * *'  # Runs at 3 AM UTC daily
+  workflow_dispatch:     # Allow manual triggering
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Sync NFL Stats
+        run: curl https://your-vercel-app.vercel.app/api/syncNFLStats 

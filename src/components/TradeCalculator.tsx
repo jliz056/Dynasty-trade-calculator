@@ -38,7 +38,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import InfoIcon from '@mui/icons-material/Info';
 import PlayerDetails from './PlayerDetails';
 import { saveTrade, getUserTrades, getPublicTrades, Trade as TradeInterface } from '../services/trade';
-import { getPlayerValues, getPickValues, searchPlayers, type PlayerData } from '../services/player';
+import { searchPlayers, type PlayerData } from '../services/player';
+import { getPlayerValues, getPickValues } from '../services/localPlayerApi';
 
 interface PlayerStats {
   position: string;
@@ -79,26 +80,6 @@ interface PlayerValuesResponse {
 interface PickValuesResponse {
   [key: string]: number;
 }
-
-// Function to fetch player values from API
-const fetchPlayerValues = async (playerIds: string[], settings: LeagueSettings): Promise<Record<string, number>> => {
-  try {
-    return await getPlayerValues(playerIds, settings);
-  } catch (error) {
-    console.error("Error fetching player values:", error);
-    return {};
-  }
-};
-
-// Function to fetch pick values from API
-const fetchPickValues = async (settings: LeagueSettings): Promise<Record<string, number>> => {
-  try {
-    return await getPickValues(settings);
-  } catch (error) {
-    console.error("Error fetching pick values:", error);
-    return {};
-  }
-};
 
 // Replace the old calculatePlayerValue function with a function to get values from API cache
 const getPlayerValue = (playerId: string, playerValues: Record<string, number>): number => {
@@ -183,14 +164,11 @@ const TradeCalculator = () => {
     const fetchValues = async () => {
       setIsLoading(true);
       try {
-        const playerIds = getAllPlayerIds();
-        if (playerIds.length > 0) {
-          const playerValueData = await fetchPlayerValues(playerIds, settings);
-          setPlayerValues(playerValueData);
-        }
+        const playerValuesResponse = await getPlayerValues();
+        setPlayerValues(playerValuesResponse.values);
         
-        const pickValueData = await fetchPickValues(settings);
-        setPickValues(pickValueData);
+        const pickValuesResponse = await getPickValues();
+        setPickValues(pickValuesResponse.values);
       } catch (error) {
         console.error("Error fetching values:", error);
         setNotification({
@@ -340,7 +318,7 @@ const TradeCalculator = () => {
   const calculateTotalValue = (side: TradeSide) => {
     const playerValue = side.players.reduce((sum, player) => {
       if (player.id) {
-        return sum + (playerValues[player.id] || player.value);
+        return sum + getPlayerValue(player.id, playerValues);
       }
       return sum + player.value;
     }, 0);
@@ -348,7 +326,7 @@ const TradeCalculator = () => {
     const pickValue = side.picks.reduce((sum, pick) => {
       // Default pick value if not found in API values
       const defaultPickValue = 200;
-      return sum + (pickValues[pick] || defaultPickValue);
+      return sum + (getPickValue(pick, pickValues) || defaultPickValue);
     }, 0);
     
     return playerValue + pickValue;
@@ -524,8 +502,8 @@ const TradeCalculator = () => {
     // Refresh player values
     try {
       const playerIds = [...getAllPlayerIds(), player.id];
-      const playerValueData = await fetchPlayerValues(playerIds, settings);
-      setPlayerValues(playerValueData);
+      const playerValueData = await getPlayerValues();
+      setPlayerValues(playerValueData.values);
     } catch (error) {
       console.error("Error fetching player values:", error);
     }

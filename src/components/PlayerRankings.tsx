@@ -31,7 +31,8 @@ import SearchIcon from '@mui/icons-material/Search';
 import FilterListIcon from '@mui/icons-material/FilterList';
 import InfoIcon from '@mui/icons-material/Info';
 import DownloadIcon from '@mui/icons-material/Download';
-import { fetchSleeperPlayers, PlayerData } from '../services/player';
+import { type PlayerData } from '../services/player';
+import { fetchPlayers } from '../services/localPlayerApi';
 
 // Type for table headers and sorting
 type Order = 'asc' | 'desc';
@@ -76,32 +77,7 @@ function PlayerRankings() {
     const loadPlayers = async () => {
       try {
         setLoading(true);
-        const allPlayersObj = await fetchSleeperPlayers();
-        
-        // Convert the object to an array and filter for active players
-        const playerArray = Object.values(allPlayersObj)
-          .filter(player => 
-            player.active && 
-            ['QB', 'RB', 'WR', 'TE'].includes(player.position)
-          )
-          .map(player => ({
-            id: player.player_id,
-            name: player.full_name,
-            position: player.position,
-            team: player.team || 'FA',
-            age: player.age || 0,
-            experience: player.experience || 0,
-            stats: {
-              position: player.position,
-              ppg: Math.random() * 20, // Mock data
-              yards: Math.floor(Math.random() * 1500),
-              td: Math.floor(Math.random() * 20),
-              snap_pct: Math.random() * 100,
-              rushing_att: Math.floor(Math.random() * 300)
-            },
-            value: Math.floor(500 + Math.random() * 9500) // Mock value between 500-10000
-          } as PlayerData));
-        
+        const playerArray = await fetchPlayers();
         setPlayers(playerArray);
       } catch (error) {
         console.error('Failed to load players:', error);

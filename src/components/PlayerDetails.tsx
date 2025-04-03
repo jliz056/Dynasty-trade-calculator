@@ -43,7 +43,8 @@ import {
   Remove as RemoveIcon,
   Info as InfoIcon
 } from '@mui/icons-material';
-import { getPlayerById, PlayerData } from '../services/player';
+import { type PlayerData } from '../services/player';
+import { fetchPlayers } from '../services/localPlayerApi';
 import { getPlayerSleeperStats, getPlayerStats } from '../services/sleeper';
 import { fetchPlayerStats } from '../services/nflApi';
 import { Player } from '../types/player';
@@ -163,19 +164,11 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
       setError(null);
       
       // Fetch player details
-      getPlayerById(playerId)
-        .then(data => {
-          if (data) {
-            setPlayer(data);
-            
-            // Fetch additional player stats from NFL API if possible
-            return fetchPlayerStats(data.id, 2023)
-              .then(statsData => {
-                setPlayerStats(statsData);
-              })
-              .catch(err => {
-                console.log('Could not fetch detailed stats, using basic data');
-              });
+      fetchPlayers()
+        .then(players => {
+          const foundPlayer = players.find(p => p.id === playerId);
+          if (foundPlayer) {
+            setPlayer(foundPlayer);
           } else {
             setError('Player not found');
           }
