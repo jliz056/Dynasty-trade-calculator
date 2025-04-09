@@ -10,5 +10,13 @@
     "api/*.ts": {
       "runtime": "@vercel/node@3.0.0"
     }
+  },
+  "github": {
+    "silent": true
+  },
+  "build": {
+    "env": {
+      "NODE_VERSION": "18.x"
+    }
   }
 } 
