@@ -15,20 +15,13 @@ import {
   TableHead,
   TableRow,
   Paper,
-  CircularProgress,
   Chip,
   Grid,
-  Divider,
   Avatar,
   DialogActions,
   Button,
   Alert,
   LinearProgress,
-  TextField,
-  MenuItem,
-  Select,
-  FormControl,
-  InputLabel,
   Collapse,
   Stack
 } from '@mui/material';
@@ -74,7 +67,7 @@ function TabPanel(props: TabPanelProps) {
   );
 }
 
-// Mock data for week-by-week stats
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const weeklyStats = [
   { week: 1, opponent: 'KC', result: 'W 24-20', targets: 9, receptions: 6, yards: 92, td: 1, fantasy_points: 21.2 },
   { week: 2, opponent: 'BUF', result: 'L 17-24', targets: 12, receptions: 8, yards: 112, td: 0, fantasy_points: 19.2 },
@@ -84,6 +77,7 @@ const weeklyStats = [
 ];
 
 // Mock data for career stats
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const careerStats = [
   { season: '2020', team: 'MIN', games: 16, targets: 125, receptions: 88, yards: 1400, td: 7, fantasy_points: 287 },
   { season: '2021', team: 'MIN', games: 17, targets: 167, receptions: 108, yards: 1616, td: 10, fantasy_points: 322 },
@@ -93,6 +87,7 @@ const careerStats = [
 ];
 
 // Mock data for fantasy league history
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const fantasyHistory = [
   { season: '2020', league: 'Dynasty Heroes', manager: 'John Smith', finish: '3rd Place', ppg: 18.8 },
   { season: '2021', league: 'Dynasty Heroes', manager: 'John Smith', finish: 'Champion', ppg: 20.1 },
@@ -101,6 +96,7 @@ const fantasyHistory = [
 ];
 
 // Mock data for depth chart
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const depthChart = [
   { position: 'WR1', name: 'Justin Jefferson', notes: 'Starter, plays 95% of snaps' },
   { position: 'WR2', name: 'Jordan Addison', notes: 'Starter, plays 80% of snaps' },
@@ -111,6 +107,7 @@ const depthChart = [
 ];
 
 // Mock data for NCAA stats
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const ncaaStats = [
   { season: '2022', school: 'Ohio State', games: 13, comp: 258, att: 389, yards: 3682, td: 41, int: 6, rushYards: 374, rushTD: 5 },
   { season: '2021', school: 'Ohio State', games: 13, comp: 287, att: 395, yards: 4435, td: 44, int: 6, rushYards: 256, rushTD: 3 },
@@ -148,29 +145,64 @@ const formatStat = (value: number | undefined, isPercentage: boolean = false) =>
 const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }) => {
   const [value, setValue] = useState(0);
   const [player, setPlayer] = useState<PlayerData | null>(null);
-  const [playerStats, setPlayerStats] = useState<any | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [collegeStats, setCollegeStats] = useState<any[]>([]);
-  const [sleeperStats, setSleeperStats] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   const [editedPlayer, setEditedPlayer] = useState<Player | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
   useEffect(() => {
-    if (open && playerId) {
+    if (open) {
       setLoading(true);
       setError(null);
       
-      // Fetch player details
+      if (!playerId) {
+        console.error('PlayerDetails: No player ID provided');
+        setError('No player ID provided');
+        setLoading(false);
+        return;
+      }
+      
+      console.log('PlayerDetails: Fetching player details for ID:', playerId);
+      
+      // Fetch player details from the API
       fetchPlayers()
         .then(players => {
-          const foundPlayer = players.find(p => p.id === playerId);
+          console.log('PlayerDetails: Received players data, count:', players.length);
+          
+          if (players.length > 0) {
+            console.log('PlayerDetails: First few players in list:', 
+              players.slice(0, 3).map(p => ({ id: p.id, name: p.name })));
+          }
+          
+          // Try to find exact match first
+          let foundPlayer = players.find(p => p.id === playerId);
+          
+          if (!foundPlayer) {
+            // If no exact match, try case-insensitive match
+            console.log('PlayerDetails: No exact match, trying case-insensitive match');
+            foundPlayer = players.find(p => p.id?.toLowerCase() === playerId?.toLowerCase());
+          }
+          
           if (foundPlayer) {
+            console.log('PlayerDetails: Found matching player:', foundPlayer);
             setPlayer(foundPlayer);
           } else {
-            setError('Player not found');
+            console.error('PlayerDetails: Player not found for ID:', playerId);
+            // Let's look at IDs to see if there's a mismatch
+            console.log('PlayerDetails: Available player IDs (sample):', 
+              players.slice(0, 5).map(p => p.id));
+              
+            // If we can't find the player by ID, try to find by name for manual entries
+            const manualPattern = /^manual_\d+$/;
+            if (manualPattern.test(playerId)) {
+              // For manual players, we'll just show a placeholder
+              console.log('PlayerDetails: This appears to be a manually added player');
+              setError('This is a manually added player. Detailed stats are not available.');
+            } else {
+              setError('Player not found. Please try again later.');
+            }
           }
         })
         .catch(error => {
@@ -183,31 +215,12 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
     }
   }, [open, playerId]);
 
-  const handleChange = (event: React.SyntheticEvent, newValue: number) => {
+  const handleChange = (_event: React.SyntheticEvent, newValue: number) => {
     setValue(newValue);
   };
 
-  const generateWeeklyStats = () => {
-    // If we have real weekly stats, use them
-    if (playerStats?.statistics?.weekly) {
-      return Object.entries(playerStats.statistics.weekly)
-        .map(([week, stats]: [string, any]) => ({
-          week: parseInt(week),
-          opponent: stats.opponent?.name || 'BYE',
-          result: stats.team_result || '-',
-          stats: stats
-        }))
-        .sort((a, b) => a.week - b.week);
-    }
-    
-    // Otherwise provide placeholder data
-    return [];
-  };
-
   const renderWeeklyStatsTable = () => {
-    const weeklyData = generateWeeklyStats();
-    
-    if (weeklyData.length === 0) {
+    if (!player) {
       return (
         <Box sx={{ textAlign: 'center', py: 3 }}>
           <Typography variant="body1" color="text.secondary">
@@ -216,125 +229,20 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
         </Box>
       );
     }
-    
+
+    // Since we don't have week-by-week data in our SQLite database yet,
+    // we'll show a message about this
     return (
-      <TableContainer component={Paper} variant="outlined">
-        <Table size="small">
-          <TableHead>
-            <TableRow sx={{ backgroundColor: '#f5f5f5' }}>
-              <TableCell>Week</TableCell>
-              <TableCell>Opp</TableCell>
-              <TableCell>Result</TableCell>
-              {player?.position === 'QB' && (
-                <>
-                  <TableCell align="right">Comp/Att</TableCell>
-                  <TableCell align="right">Pass Yds</TableCell>
-                  <TableCell align="right">Pass TD</TableCell>
-                  <TableCell align="right">INT</TableCell>
-                  <TableCell align="right">Rush Yds</TableCell>
-                  <TableCell align="right">Rush TD</TableCell>
-                </>
-              )}
-              {(player?.position === 'RB') && (
-                <>
-                  <TableCell align="right">Rush Att</TableCell>
-                  <TableCell align="right">Rush Yds</TableCell>
-                  <TableCell align="right">Rush TD</TableCell>
-                  <TableCell align="right">Rec</TableCell>
-                  <TableCell align="right">Rec Yds</TableCell>
-                  <TableCell align="right">Rec TD</TableCell>
-                </>
-              )}
-              {(player?.position === 'WR' || player?.position === 'TE') && (
-                <>
-                  <TableCell align="right">Targets</TableCell>
-                  <TableCell align="right">Rec</TableCell>
-                  <TableCell align="right">Rec Yds</TableCell>
-                  <TableCell align="right">Rec TD</TableCell>
-                  <TableCell align="right">Rush Att</TableCell>
-                  <TableCell align="right">Rush Yds</TableCell>
-                </>
-              )}
-              <TableCell align="right">Fantasy Pts</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {weeklyData.map((week) => (
-              <TableRow key={week.week} hover>
-                <TableCell>{week.week}</TableCell>
-                <TableCell>{week.opponent}</TableCell>
-                <TableCell>{week.result}</TableCell>
-                {player?.position === 'QB' && (
-                  <>
-                    <TableCell align="right">
-                      {week.stats?.passing?.completions || 0}/{week.stats?.passing?.attempts || 0}
-                    </TableCell>
-                    <TableCell align="right">{week.stats?.passing?.yards || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.passing?.touchdowns || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.passing?.interceptions || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.yards || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.touchdowns || 0}</TableCell>
-                  </>
-                )}
-                {player?.position === 'RB' && (
-                  <>
-                    <TableCell align="right">{week.stats?.rushing?.attempts || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.yards || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.touchdowns || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.receptions || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.yards || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.touchdowns || 0}</TableCell>
-                  </>
-                )}
-                {(player?.position === 'WR' || player?.position === 'TE') && (
-                  <>
-                    <TableCell align="right">{week.stats?.receiving?.targets || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.receptions || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.yards || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.receiving?.touchdowns || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.attempts || 0}</TableCell>
-                    <TableCell align="right">{week.stats?.rushing?.yards || 0}</TableCell>
-                  </>
-                )}
-                <TableCell align="right">{calculateFantasyPoints(week.stats, player?.position).toFixed(1)}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
+      <Box sx={{ textAlign: 'center', py: 3 }}>
+        <Typography variant="body1" color="text.secondary">
+          Weekly stats are not available yet. We're showing season totals only.
+        </Typography>
+      </Box>
     );
-  };
-  
-  const calculateFantasyPoints = (stats: any, position: string = 'WR') => {
-    if (!stats) return 0;
-    
-    let points = 0;
-    
-    // Half PPR scoring
-    if (stats.receiving) {
-      points += (stats.receiving.yards || 0) * 0.1;  // 0.1 pts per receiving yard
-      points += (stats.receiving.touchdowns || 0) * 6; // 6 pts per TD
-      points += (stats.receiving.receptions || 0) * 0.5; // 0.5 pts per reception (Half PPR)
-    }
-    
-    if (stats.rushing) {
-      points += (stats.rushing.yards || 0) * 0.1; // 0.1 pts per rushing yard
-      points += (stats.rushing.touchdowns || 0) * 6; // 6 pts per TD
-    }
-    
-    if (stats.passing) {
-      points += (stats.passing.yards || 0) * 0.04; // 0.04 pts per passing yard
-      points += (stats.passing.touchdowns || 0) * 4; // 4 pts per passing TD
-      points -= (stats.passing.interceptions || 0) * 2; // -2 pts per interception
-    }
-    
-    return points;
   };
 
   const renderCareerStats = () => {
-    const careerData = playerStats?.statistics?.career || {};
-    
-    if (!playerStats || !careerData) {
+    if (!player) {
       return (
         <Box sx={{ textAlign: 'center', py: 3 }}>
           <Typography variant="body1" color="text.secondary">
@@ -347,38 +255,22 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
     return (
       <Box>
         <Grid container spacing={3}>
-          {player?.position === 'QB' && (
+          {player.position === 'QB' && (
             <>
               <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Passing</Typography>
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Completions</Typography>
-                    <Typography variant="h6">{careerData.passing?.completions || 0}</Typography>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Attempts</Typography>
-                    <Typography variant="h6">{careerData.passing?.attempts || 0}</Typography>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Completion %</Typography>
-                    <Typography variant="h6">
-                      {careerData.passing?.attempts ? 
-                        ((careerData.passing?.completions / careerData.passing?.attempts) * 100).toFixed(1) + '%' 
-                        : 'N/A'}
-                    </Typography>
-                  </Box>
-                  <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.passing?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.passing?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.passing?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.passing?.touchdowns || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">INTs</Typography>
-                    <Typography variant="h6">{careerData.passing?.interceptions || 0}</Typography>
+                    <Typography variant="h6">{player.stats.passing?.interceptions || 0}</Typography>
                   </Box>
                 </Paper>
               </Grid>
@@ -388,15 +280,15 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                   <Typography variant="subtitle1" gutterBottom>Rushing</Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Attempts</Typography>
-                    <Typography variant="h6">{careerData.rushing?.attempts || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing_att || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.rushing?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.rushing?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.touchdowns || 0}</Typography>
                   </Box>
                 </Paper>
               </Grid>
@@ -405,17 +297,17 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Career Summary</Typography>
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Games Played</Typography>
-                    <Typography variant="h6">{careerData.games_played || 0}</Typography>
+                    <Typography variant="subtitle2">Experience</Typography>
+                    <Typography variant="h6">{player.experience} years</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Passer Rating</Typography>
-                    <Typography variant="h6">{careerData.passing?.rating?.toFixed(1) || 'N/A'}</Typography>
+                    <Typography variant="subtitle2">Fantasy PPG</Typography>
+                    <Typography variant="h6">{player.stats.ppg || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">Total TDs</Typography>
                     <Typography variant="h6">
-                      {(careerData.passing?.touchdowns || 0) + (careerData.rushing?.touchdowns || 0)}
+                      {(player.stats.passing?.touchdowns || 0) + (player.stats.rushing?.touchdowns || 0)}
                     </Typography>
                   </Box>
                 </Paper>
@@ -423,28 +315,28 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
             </>
           )}
           
-          {player?.position === 'RB' && (
+          {player.position === 'RB' && (
             <>
               <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Rushing</Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Attempts</Typography>
-                    <Typography variant="h6">{careerData.rushing?.attempts || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing_att || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.rushing?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.rushing?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.touchdowns || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">Yards Per Carry</Typography>
                     <Typography variant="h6">
-                      {careerData.rushing?.attempts ? 
-                        (careerData.rushing.yards / careerData.rushing.attempts).toFixed(1) 
+                      {player.stats.rushing_att ? 
+                        (player.stats.rushing?.yards || 0 / player.stats.rushing_att).toFixed(1) 
                         : 'N/A'}
                     </Typography>
                   </Box>
@@ -456,19 +348,19 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                   <Typography variant="subtitle1" gutterBottom>Receiving</Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Receptions</Typography>
-                    <Typography variant="h6">{careerData.receiving?.receptions || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receptions || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Targets</Typography>
-                    <Typography variant="h6">{careerData.receiving?.targets || 'N/A'}</Typography>
+                    <Typography variant="h6">{player.stats.receiving?.targets || 'N/A'}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.receiving?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receiving?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.receiving?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receiving?.touchdowns || 0}</Typography>
                   </Box>
                 </Paper>
               </Grid>
@@ -477,19 +369,19 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Career Summary</Typography>
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Games Played</Typography>
-                    <Typography variant="h6">{careerData.games_played || 0}</Typography>
+                    <Typography variant="subtitle2">Experience</Typography>
+                    <Typography variant="h6">{player.experience} years</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Scrimmage Yards</Typography>
                     <Typography variant="h6">
-                      {((careerData.rushing?.yards || 0) + (careerData.receiving?.yards || 0)).toLocaleString()}
+                      {((player.stats.rushing?.yards || 0) + (player.stats.receiving?.yards || 0)).toLocaleString()}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">Total TDs</Typography>
                     <Typography variant="h6">
-                      {(careerData.rushing?.touchdowns || 0) + (careerData.receiving?.touchdowns || 0)}
+                      {(player.stats.rushing?.touchdowns || 0) + (player.stats.receiving?.touchdowns || 0)}
                     </Typography>
                   </Box>
                 </Paper>
@@ -497,32 +389,32 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
             </>
           )}
           
-          {(player?.position === 'WR' || player?.position === 'TE') && (
+          {(player.position === 'WR' || player.position === 'TE') && (
             <>
               <Grid item xs={12} md={4}>
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Receiving</Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Receptions</Typography>
-                    <Typography variant="h6">{careerData.receiving?.receptions || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receptions || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Targets</Typography>
-                    <Typography variant="h6">{careerData.receiving?.targets || 'N/A'}</Typography>
+                    <Typography variant="h6">{player.stats.targets || 'N/A'}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.receiving?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receiving?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.receiving?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.receiving?.touchdowns || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">Yards Per Reception</Typography>
                     <Typography variant="h6">
-                      {careerData.receiving?.receptions ? 
-                        (careerData.receiving.yards / careerData.receiving.receptions).toFixed(1) 
+                      {player.stats.receptions ? 
+                        (player.stats.receiving?.yards || 0 / player.stats.receptions).toFixed(1) 
                         : 'N/A'}
                     </Typography>
                   </Box>
@@ -534,15 +426,15 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                   <Typography variant="subtitle1" gutterBottom>Rushing</Typography>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Attempts</Typography>
-                    <Typography variant="h6">{careerData.rushing?.attempts || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing_att || 0}</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Yards</Typography>
-                    <Typography variant="h6">{careerData.rushing?.yards?.toLocaleString() || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.yards?.toLocaleString() || 0}</Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">TDs</Typography>
-                    <Typography variant="h6">{careerData.rushing?.touchdowns || 0}</Typography>
+                    <Typography variant="h6">{player.stats.rushing?.touchdowns || 0}</Typography>
                   </Box>
                 </Paper>
               </Grid>
@@ -551,19 +443,19 @@ const PlayerDetails: React.FC<PlayerDetailsProps> = ({ open, onClose, playerId }
                 <Paper sx={{ p: 2 }}>
                   <Typography variant="subtitle1" gutterBottom>Career Summary</Typography>
                   <Box sx={{ mb: 2 }}>
-                    <Typography variant="subtitle2">Games Played</Typography>
-                    <Typography variant="h6">{careerData.games_played || 0}</Typography>
+                    <Typography variant="subtitle2">Experience</Typography>
+                    <Typography variant="h6">{player.experience} years</Typography>
                   </Box>
                   <Box sx={{ mb: 2 }}>
                     <Typography variant="subtitle2">Scrimmage Yards</Typography>
                     <Typography variant="h6">
-                      {((careerData.rushing?.yards || 0) + (careerData.receiving?.yards || 0)).toLocaleString()}
+                      {((player.stats.rushing?.yards || 0) + (player.stats.receiving?.yards || 0)).toLocaleString()}
                     </Typography>
                   </Box>
                   <Box>
                     <Typography variant="subtitle2">Total TDs</Typography>
                     <Typography variant="h6">
-                      {(careerData.rushing?.touchdowns || 0) + (careerData.receiving?.touchdowns || 0)}
+                      {(player.stats.rushing?.touchdowns || 0) + (player.stats.receiving?.touchdowns || 0)}
                     </Typography>
                   </Box>
                 </Paper>

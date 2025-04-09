@@ -1,8 +1,21 @@
 import axios from 'axios';
 import type { PlayerData } from './player';
 
+// Use environment variable for API URL or fall back to default
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const SLEEPER_API_URL = import.meta.env.VITE_SLEEPER_API_URL || 'https://api.sleeper.app/v1';
+
+console.log('API BASE URL:', API_BASE_URL);
+console.log('SLEEPER API URL:', SLEEPER_API_URL);
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_URL,
+  timeout: 10000,
+});
+
+// Create an instance for Sleeper API
+const sleeperApi = axios.create({
+  baseURL: SLEEPER_API_URL,
   timeout: 10000,
 });
 
@@ -23,6 +36,19 @@ export interface PickValuesResponse {
   values: Record<string, number>;
 }
 
+interface SleeperPlayer {
+  player_id?: string;
+  id?: string;
+  full_name?: string;
+  first_name?: string;
+  last_name?: string;
+  team?: string;
+  position?: string;
+  fantasy_positions?: string[];
+  age?: number;
+  years_exp?: number;
+}
+
 // Convert API player to PlayerData format
 const convertApiPlayer = (player: Player): PlayerData => {
   return {
@@ -30,27 +56,71 @@ const convertApiPlayer = (player: Player): PlayerData => {
     name: player.name,
     position: player.position,
     team: player.team || 'FA',
-    age: 0, // Not provided by our simple API
-    experience: 0, // Not provided by our simple API
+    age: 0, // Default age
+    experience: 0, // Default experience
     stats: {
-      position: player.position,
+      position: player.position || '',
       ppg: 0,
       yards: 0,
       td: 0,
       snap_pct: 0,
-      rushing_att: 0
+      rushing_att: 0,
     },
     value: player.value
   };
 };
 
-// Fetch players from our local SQLite API
+// Fetch players from our Sleeper API 
 export const fetchPlayers = async (): Promise<PlayerData[]> => {
   try {
-    const response = await api.get<Player[]>('/players');
-    return response.data.map(convertApiPlayer);
+    console.log('Fetching players from Sleeper API...');
+    // Use the direct Sleeper API URL
+    const response = await sleeperApi.get<SleeperPlayer[]>('/players/nfl');
+    console.log('API Response received:', response.status);
+    console.log('Number of players received:', response.data ? Object.keys(response.data).length : 0);
+    
+    // Sleeper returns an object, not an array, so we need to convert it
+    const playersObj = response.data || {};
+    const playersArray = Object.values(playersObj) as SleeperPlayer[];
+    
+    console.log('Converted to array, count:', playersArray.length);
+    
+    // Log a sample player if available
+    if (playersArray.length > 0) {
+      console.log('Sample player data:', playersArray[0]);
+    } else {
+      console.log('No player data received from API');
+    }
+    
+    const mappedPlayers = playersArray.map((player: SleeperPlayer) => {
+      const mappedPlayer = {
+        id: player.player_id || player.id || '',
+        name: player.full_name || (player.first_name ? player.first_name + ' ' + player.last_name : '') || '',
+        team: player.team || 'FA',
+        position: player.position || '',
+        age: player.age || 0,
+        experience: player.years_exp || 0,
+        stats: {
+          position: player.position || '',
+          ppg: 0,
+          yards: 0,
+          td: 0,
+          snap_pct: 0,
+          rushing_att: 0,
+        },
+        value: player.fantasy_positions?.includes('QB') ? 80 : 60,
+      };
+      return mappedPlayer;
+    });
+    
+    console.log('Mapped player count:', mappedPlayers.length);
+    if (mappedPlayers.length > 0) {
+      console.log('Sample mapped player:', mappedPlayers[0]);
+    }
+    
+    return mappedPlayers;
   } catch (error) {
-    console.error('Error fetching players from local API:', error);
+    console.error('Error fetching players from Sleeper API:', error);
     return [];
   }
 };

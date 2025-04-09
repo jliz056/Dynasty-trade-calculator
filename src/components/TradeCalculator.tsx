@@ -448,7 +448,7 @@ const TradeCalculator = () => {
       setSettings({
         scoring: trade.league.scoring as LeagueSettings['scoring'],
         format: trade.league.format as LeagueSettings['format'],
-        league_size: trade.league.size
+        league_size: trade.league.size || 12
       });
     }
     
@@ -520,6 +520,7 @@ const TradeCalculator = () => {
   };
 
   const handlePlayerClick = (playerId: string) => {
+    console.log('Clicked on player with ID:', playerId);
     setSelectedPlayerId(playerId);
     setPlayerDetailsOpen(true);
   };
@@ -630,7 +631,10 @@ const TradeCalculator = () => {
                     <IconButton
                       edge="end"
                       aria-label="info"
-                      onClick={() => handlePlayerClick(player.id)}
+                      onClick={() => {
+                        console.log('Info button clicked for player:', player.name, 'with ID:', player.id);
+                        handlePlayerClick(player.id || '');
+                      }}
                       sx={{ mr: 1 }}
                     >
                       <InfoIcon />
@@ -760,7 +764,10 @@ const TradeCalculator = () => {
                     <IconButton
                       edge="end"
                       aria-label="info"
-                      onClick={() => handlePlayerClick(player.id)}
+                      onClick={() => {
+                        console.log('Info button clicked for player:', player.name, 'with ID:', player.id);
+                        handlePlayerClick(player.id || '');
+                      }}
                       sx={{ mr: 1 }}
                     >
                       <InfoIcon />

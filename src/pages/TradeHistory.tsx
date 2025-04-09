@@ -43,6 +43,7 @@ const TradeHistory = () => {
   const [editIsPublic, setEditIsPublic] = useState(false);
   const [currentTab, setCurrentTab] = useState(0);
   const [newTrade, setNewTrade] = useState<Trade>({
+    userId: auth.currentUser?.uid || 'anonymous',
     title: '',
     isPublic: false,
     league: {
@@ -148,10 +149,10 @@ const TradeHistory = () => {
       const tradeToSave: Trade = {
         ...newTrade,
         league: {
-          name: newTrade.league.name,
-          scoring: newTrade.league.scoring || 'PPR', // Provide default value
-          format: newTrade.league.format || '1QB', // Provide default value
-          size: newTrade.league.size || 12 // Provide default value
+          name: newTrade.league?.name || '',
+          scoring: newTrade.league?.scoring || 'PPR', // Provide default value
+          format: newTrade.league?.format || '1QB', // Provide default value
+          size: newTrade.league?.size || 12 // Provide default value
         },
         userId: auth.currentUser?.uid || 'anonymous', // Use actual user ID if available
         createdAt: new Date()
@@ -162,6 +163,7 @@ const TradeHistory = () => {
       setSuccess('Trade saved successfully!');
       setNewTrade({
         title: '',
+        userId: auth.currentUser?.uid || 'anonymous', 
         isPublic: false,
         league: {
           name: '',

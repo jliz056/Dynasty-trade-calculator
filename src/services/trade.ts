@@ -20,6 +20,22 @@ export interface PlayerStats {
   td: number;
   snap_pct: number;
   rushing_att: number;
+  targets?: number;
+  receptions?: number;
+  passing?: {
+    yards: number;
+    touchdowns: number;
+    interceptions: number;
+  };
+  rushing?: {
+    yards: number;
+    touchdowns: number;
+  };
+  receiving?: {
+    yards: number;
+    touchdowns: number;
+    targets?: number;
+  };
 }
 
 export interface Player {
@@ -52,7 +68,7 @@ export interface Trade {
 }
 
 // Save a new trade
-export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'>): Promise<string> => {
+export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'>): Promise<Trade> => {
   const user = auth.currentUser;
   if (!user) {
     throw new Error('You must be logged in to save a trade');
@@ -66,7 +82,7 @@ export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'
     };
 
     const docRef = await addDoc(collection(db, 'trades'), tradeData);
-    return docRef.id;
+    return tradeData;
   } catch (error: any) {
     console.error('Error saving trade:', error);
     throw new Error(error.message || 'Failed to save trade');
