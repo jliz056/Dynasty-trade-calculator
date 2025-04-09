@@ -9,7 +9,9 @@ import {
   updateDoc,
   deleteDoc,
   serverTimestamp,
-  orderBy
+  orderBy,
+  FieldValue,
+  Timestamp
 } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
@@ -57,7 +59,7 @@ export interface Trade {
   sideB: TradeSide;
   totalValueA: number;
   totalValueB: number;
-  createdAt: Date;
+  createdAt: Date | Timestamp | FieldValue;
   isPublic: boolean;
   league?: {
     name: string;
@@ -80,9 +82,12 @@ export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'
       userId: user.uid,
       createdAt: serverTimestamp()
     };
-
     const docRef = await addDoc(collection(db, 'trades'), tradeData);
-    return tradeData;
+    return {
+      ...tradeData,
+      id: docRef.id,
+      createdAt: new Date()
+    };
   } catch (error: any) {
     console.error('Error saving trade:', error);
     throw new Error(error.message || 'Failed to save trade');
