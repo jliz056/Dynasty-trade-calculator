@@ -10,4 +10,4 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Sync NFL Stats
-        run: curl https://your-vercel-app.vercel.app/api/syncNFLStats 
+        run: curl https://dynasty-trade-calculator.vercel.app/api/syncNFLStats 

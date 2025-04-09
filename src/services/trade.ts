@@ -59,7 +59,7 @@ export interface Trade {
   sideB: TradeSide;
   totalValueA: number;
   totalValueB: number;
-  createdAt: Date | Timestamp | FieldValue;
+  createdAt: Date;
   isPublic: boolean;
   league?: {
     name: string;
@@ -68,6 +68,15 @@ export interface Trade {
     size?: number;
   };
 }
+
+// Utility function to safely convert timestamps
+const convertTimestamp = (value: any): Date => {
+  // Check if it's a Firebase Timestamp
+  if (value && typeof value === 'object' && 'toDate' in value) {
+    return value.toDate();
+  }
+  return new Date();
+};
 
 // Save a new trade
 export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'>): Promise<Trade> => {
@@ -86,7 +95,7 @@ export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'
     return {
       ...tradeData,
       id: docRef.id,
-      createdAt: new Date()
+      createdAt: convertTimestamp(tradeData.createdAt)
     };
   } catch (error: any) {
     console.error('Error saving trade:', error);
@@ -105,7 +114,7 @@ export const getTrade = async (tradeId: string): Promise<Trade> => {
       return {
         id: docSnap.id,
         ...data,
-        createdAt: data.createdAt?.toDate() || new Date()
+        createdAt: convertTimestamp(data.createdAt)
       } as Trade;
     } else {
       throw new Error('Trade not found');
@@ -131,10 +140,10 @@ export const getUserTrades = async (): Promise<Trade[]> => {
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    return querySnapshot.docs.map((doc: { id: any; data: () => Trade; }) => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate() || new Date()
+      createdAt: convertTimestamp(doc.data().createdAt)
     } as Trade));
   } catch (error: any) {
     console.error('Error getting user trades:', error);
@@ -152,10 +161,10 @@ export const getPublicTrades = async (limit = 10): Promise<Trade[]> => {
     );
     
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({
+    return querySnapshot.docs.map((doc: { id: any; data: () => Trade; }) => ({
       id: doc.id,
       ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate() || new Date()
+      createdAt: convertTimestamp(doc.data().createdAt)
     } as Trade)).slice(0, limit);
   } catch (error: any) {
     console.error('Error getting public trades:', error);

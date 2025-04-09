@@ -1,5 +1,7 @@
 import axios from 'axios';
 import type { PlayerData } from './player';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../config/firebase';
 
 // Use environment variable for API URL or fall back to default
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
@@ -70,27 +72,47 @@ const convertApiPlayer = (player: Player): PlayerData => {
   };
 };
 
-// Fetch players from our Sleeper API 
+// Function to fetch players from Firebase
 export const fetchPlayers = async (): Promise<PlayerData[]> => {
   try {
-    console.log('Fetching players from Sleeper API...');
-    // Use the direct Sleeper API URL
-    const response = await sleeperApi.get<SleeperPlayer[]>('/players/nfl');
+    console.log('Fetching players from Firebase...');
+    
+    // First, try to get players from Firebase
+    const playersSnapshot = await getDocs(collection(db, 'players'));
+    if (!playersSnapshot.empty) {
+      console.log('Found players in Firebase:', playersSnapshot.size);
+      return playersSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          name: data.name,
+          team: data.team || 'FA',
+          position: data.position || '',
+          age: data.age || 0,
+          experience: data.experience || 0,
+          stats: {
+            position: data.position || '',
+            ppg: 0,
+            yards: 0,
+            td: 0,
+            snap_pct: 0,
+            rushing_att: 0,
+          },
+          value: data.value || 0
+        };
+      });
+    }
+    
+    // If no players in Firebase, fetch from Sleeper
+    console.log('No players found in Firebase, fetching from Sleeper API...');
+    const response = await sleeperApi.get<Record<string, SleeperPlayer>>('/players/nfl');
     console.log('API Response received:', response.status);
-    console.log('Number of players received:', response.data ? Object.keys(response.data).length : 0);
     
     // Sleeper returns an object, not an array, so we need to convert it
     const playersObj = response.data || {};
     const playersArray = Object.values(playersObj) as SleeperPlayer[];
     
     console.log('Converted to array, count:', playersArray.length);
-    
-    // Log a sample player if available
-    if (playersArray.length > 0) {
-      console.log('Sample player data:', playersArray[0]);
-    } else {
-      console.log('No player data received from API');
-    }
     
     const mappedPlayers = playersArray.map((player: SleeperPlayer) => {
       const mappedPlayer = {
@@ -113,14 +135,10 @@ export const fetchPlayers = async (): Promise<PlayerData[]> => {
       return mappedPlayer;
     });
     
-    console.log('Mapped player count:', mappedPlayers.length);
-    if (mappedPlayers.length > 0) {
-      console.log('Sample mapped player:', mappedPlayers[0]);
-    }
-    
+    console.log('Returning players from Sleeper, count:', mappedPlayers.length);
     return mappedPlayers;
   } catch (error) {
-    console.error('Error fetching players from Sleeper API:', error);
+    console.error('Error fetching players:', error);
     return [];
   }
 };

@@ -1,72 +1,90 @@
-import { IncomingMessage, ServerResponse } from 'http';
-import db from '../database/db';
-import { fetchNFLPlayers } from '../utils/fetchNFL';
+import { VercelRequest, VercelResponse } from '@vercel/node';
+import axios from 'axios';
+import { collection, addDoc, query, where, getDocs, updateDoc, doc } from 'firebase/firestore';
+import { db } from '../src/config/firebase';
 
-export default async function handler(req: IncomingMessage, res: ServerResponse) {
+// Sleeper API URL
+const SLEEPER_API_URL = 'https://api.sleeper.app/v1';
+
+// Function to fetch players from Sleeper API
+const fetchSleeperPlayers = async () => {
   try {
-    const players = await fetchNFLPlayers();
+    const response = await axios.get(`${SLEEPER_API_URL}/players/nfl`);
+    return response.data;
+  } catch (error) {
+    console.error('Error fetching players from Sleeper:', error);
+    throw error;
+  }
+};
 
-    // Prepare statements for player and player_stats tables
-    const playerStmt = db.prepare(`
-      INSERT OR REPLACE INTO players (id, name, position, team, value, age, experience)
-      VALUES (@id, @name, @position, @team, @value, @age, @experience)
-    `);
-
-    const statsStmt = db.prepare(`
-      INSERT OR REPLACE INTO player_stats (
-        player_id, ppg, yards, td, snap_pct, rushing_att, targets, receptions,
-        passing_yards, passing_td, passing_int, rushing_yards, rushing_td,
-        receiving_yards, receiving_td
-      ) VALUES (
-        @id, @ppg, @yards, @td, @snap_pct, @rushing_att, @targets, @receptions,
-        @passing_yards, @passing_td, @passing_int, @rushing_yards, @rushing_td,
-        @receiving_yards, @receiving_td
-      )
-    `);
-
-    // Transaction to insert both player data and stats
-    const insertMany = db.transaction((players) => {
-      for (const player of players) {
-        // Insert player basic info
-        playerStmt.run({
-          id: player.id,
-          name: player.name,
-          position: player.position,
-          team: player.team,
-          value: player.value,
-          age: player.age,
-          experience: player.experience
-        });
-
-        // Insert player stats
-        statsStmt.run({
-          id: player.id,
-          ppg: player.stats.ppg,
-          yards: player.stats.yards,
-          td: player.stats.td,
-          snap_pct: player.stats.snap_pct,
-          rushing_att: player.stats.rushing_att,
-          targets: player.stats.targets || 0,
-          receptions: player.stats.receptions || 0,
-          passing_yards: player.stats.passing_yards || 0,
-          passing_td: player.stats.passing_td || 0,
-          passing_int: player.stats.passing_int || 0,
-          rushing_yards: player.stats.rushing_yards || 0,
-          rushing_td: player.stats.rushing_td || 0,
-          receiving_yards: player.stats.receiving_yards || 0,
-          receiving_td: player.stats.receiving_td || 0
-        });
+// Handler function for the API endpoint
+export default async function handler(
+  req: VercelRequest,
+  res: VercelResponse
+) {
+  try {
+    console.log('Starting NFL stats sync...');
+    
+    // Fetch player data from Sleeper
+    const sleeperPlayers = await fetchSleeperPlayers();
+    console.log(`Fetched ${Object.keys(sleeperPlayers).length} players from Sleeper API`);
+    
+    // Convert object to array and process players
+    const playersArray = Object.values(sleeperPlayers);
+    const playerBatch = playersArray.slice(0, 100); // Process 100 players at a time to avoid timeouts
+    
+    // Counter for tracking changes
+    let created = 0;
+    let updated = 0;
+    
+    // Process each player
+    for (const player of playerBatch) {
+      if (!player.position || !player.full_name) continue; // Skip players with missing data
+      
+      // Check if player already exists
+      const playersRef = collection(db, 'players');
+      const q = query(playersRef, where('player_id', '==', player.player_id));
+      const querySnapshot = await getDocs(q);
+      
+      const playerData = {
+        player_id: player.player_id,
+        name: player.full_name || `${player.first_name} ${player.last_name}`,
+        position: player.position,
+        team: player.team || 'FA',
+        age: player.age || 0,
+        experience: player.years_exp || 0,
+        value: player.fantasy_positions?.includes('QB') ? 80 : 
+               player.position === 'RB' ? 70 : 
+               player.position === 'WR' ? 65 : 
+               player.position === 'TE' ? 60 : 50,
+        updated_at: new Date()
+      };
+      
+      if (querySnapshot.empty) {
+        // Create new player document
+        await addDoc(playersRef, playerData);
+        created++;
+      } else {
+        // Update existing player document
+        const playerDoc = querySnapshot.docs[0];
+        await updateDoc(doc(db, 'players', playerDoc.id), playerData);
+        updated++;
       }
+    }
+    
+    console.log(`Sync complete. Created: ${created}, Updated: ${updated}`);
+    
+    // Return success response
+    return res.status(200).json({
+      success: true,
+      message: `NFL stats synced successfully. Created: ${created}, Updated: ${updated}`
     });
-
-    insertMany(players);
-    res.statusCode = 200;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: true, count: players.length }));
   } catch (error) {
     console.error('Error syncing NFL stats:', error);
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json');
-    res.end(JSON.stringify({ success: false, error: 'Failed to sync NFL stats' }));
+    return res.status(500).json({
+      success: false,
+      message: 'Error syncing NFL stats',
+      error: error.message
+    });
   }
 } 

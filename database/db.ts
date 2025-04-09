@@ -1,43 +1,74 @@
-import Database from 'better-sqlite3';
-import path from 'path';
+// Replace SQLite with Firebase Firestore for Vercel compatibility
+import { 
+  collection, 
+  query, 
+  where, 
+  getDocs, 
+  addDoc, 
+  doc, 
+  updateDoc, 
+  deleteDoc,
+  getFirestore
+} from 'firebase/firestore';
+import app from '../src/config/firebase';
 
-const db = new Database(path.resolve(__dirname, 'nfl.db'));
+// Use the existing Firebase db export
+import { db } from '../src/config/firebase';
 
-// Create tables if they don't exist
-const playerSchema = `
-CREATE TABLE IF NOT EXISTS players (
-  id TEXT PRIMARY KEY,
-  name TEXT,
-  position TEXT,
-  team TEXT,
-  value REAL,
-  age INTEGER DEFAULT 0,
-  experience INTEGER DEFAULT 0,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-);`;
+// Player collection reference
+const playersCollection = collection(db, 'players');
+const playerStatsCollection = collection(db, 'player_stats');
 
-const statsSchema = `
-CREATE TABLE IF NOT EXISTS player_stats (
-  player_id TEXT PRIMARY KEY,
-  ppg REAL DEFAULT 0,
-  yards INTEGER DEFAULT 0,
-  td INTEGER DEFAULT 0,
-  snap_pct REAL DEFAULT 0,
-  rushing_att INTEGER DEFAULT 0,
-  targets INTEGER DEFAULT 0,
-  receptions INTEGER DEFAULT 0,
-  passing_yards INTEGER DEFAULT 0,
-  passing_td INTEGER DEFAULT 0,
-  passing_int INTEGER DEFAULT 0,
-  rushing_yards INTEGER DEFAULT 0,
-  rushing_td INTEGER DEFAULT 0,
-  receiving_yards INTEGER DEFAULT 0,
-  receiving_td INTEGER DEFAULT 0,
-  updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (player_id) REFERENCES players(id)
-);`;
+// Create or update a player
+export const upsertPlayer = async (playerData: any) => {
+  const q = query(playersCollection, where('id', '==', playerData.id));
+  const querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    // Update existing player
+    const docRef = doc(db, 'players', querySnapshot.docs[0].id);
+    await updateDoc(docRef, playerData);
+    return docRef.id;
+  } else {
+    // Create new player
+    const docRef = await addDoc(playersCollection, playerData);
+    return docRef.id;
+  }
+};
 
-db.exec(playerSchema);
-db.exec(statsSchema);
+// Create or update player stats
+export const upsertPlayerStats = async (statsData: any) => {
+  const q = query(playerStatsCollection, where('player_id', '==', statsData.player_id));
+  const querySnapshot = await getDocs(q);
+  
+  if (!querySnapshot.empty) {
+    // Update existing stats
+    const docRef = doc(db, 'player_stats', querySnapshot.docs[0].id);
+    await updateDoc(docRef, statsData);
+    return docRef.id;
+  } else {
+    // Create new stats
+    const docRef = await addDoc(playerStatsCollection, statsData);
+    return docRef.id;
+  }
+};
+
+// Get all players
+export const getAllPlayers = async () => {
+  const querySnapshot = await getDocs(playersCollection);
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+};
+
+// Get player stats
+export const getPlayerStatsById = async (playerId: string) => {
+  const q = query(playerStatsCollection, where('player_id', '==', playerId));
+  const querySnapshot = await getDocs(q);
+  
+  if (querySnapshot.empty) {
+    return null;
+  }
+  
+  return { id: querySnapshot.docs[0].id, ...querySnapshot.docs[0].data() };
+};
 
 export default db; 
