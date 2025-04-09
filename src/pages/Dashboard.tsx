@@ -25,6 +25,7 @@ import { fetchSleeperPlayers } from '../services/player';
 import { auth } from '../config/firebase';
 import { useNavigate } from 'react-router-dom';
 import { User } from 'firebase/auth';
+import { Timestamp, FieldValue } from 'firebase/firestore';
 
 // Define the player interfaces for different rankings
 interface RankedPlayer {
@@ -47,6 +48,17 @@ interface NCAAProspect {
   projectedPick?: number;
   notes: string;
 }
+
+// Add a utility function to format dates safely
+const formatDate = (dateValue: Date | Timestamp | FieldValue): string => {
+  if (dateValue instanceof Date) {
+    return dateValue.toLocaleDateString();
+  }
+  if (dateValue && typeof dateValue === 'object' && 'toDate' in dateValue) {
+    return dateValue.toDate().toLocaleDateString();
+  }
+  return 'Pending';
+};
 
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
@@ -410,7 +422,7 @@ const Dashboard = () => {
                           </Typography>
                         )}
                         <Typography variant="body2" color="text.secondary">
-                          {new Date(trade.createdAt).toLocaleDateString()}
+                          {formatDate(trade.createdAt)}
                         </Typography>
                         <Divider sx={{ my: 1 }} />
                         <Grid container spacing={1}>

@@ -29,6 +29,18 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ShareIcon from '@mui/icons-material/Share';
 import { auth } from '../config/firebase';
+import { Timestamp, FieldValue } from 'firebase/firestore';
+
+// Add a utility function to format dates safely
+const formatDate = (dateValue: Date | Timestamp | FieldValue): string => {
+  if (dateValue instanceof Date) {
+    return dateValue.toLocaleDateString();
+  }
+  if (dateValue && typeof dateValue === 'object' && 'toDate' in dateValue) {
+    return dateValue.toDate().toLocaleDateString();
+  }
+  return 'Pending';
+};
 
 const TradeHistory = () => {
   const [loading, setLoading] = useState(true);
@@ -260,7 +272,7 @@ const TradeHistory = () => {
                           {trade.league?.format} - {trade.league?.scoring}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {new Date(trade.createdAt).toLocaleDateString()}
+                          {formatDate(trade.createdAt)}
                         </Typography>
                         
                         <Divider sx={{ my: 1 }} />
@@ -355,7 +367,7 @@ const TradeHistory = () => {
                           {trade.league?.format} - {trade.league?.scoring}
                         </Typography>
                         <Typography variant="body2" color="text.secondary">
-                          {new Date(trade.createdAt).toLocaleDateString()}
+                          {formatDate(trade.createdAt)}
                         </Typography>
                         
                         <Divider sx={{ my: 1 }} />
