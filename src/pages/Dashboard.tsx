@@ -2,8 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   Container, 
   Typography, 
-  Box, 
-  Grid, 
+  Box,  
   Paper, 
   Button, 
   Card, 
@@ -18,14 +17,17 @@ import {
   TableHead,
   TableRow,
   Chip,
-  Avatar
+  Avatar,
 } from '@mui/material';
+import { Theme } from '@mui/material/styles';
+import { SxProps } from '@mui/system';
 import { getUserTrades, Trade } from '../services/trade';
 import { fetchSleeperPlayers } from '../services/player';
-import { auth } from '../config/firebase';
+import { supabase } from '../../supabaseClient.js';
 import { useNavigate } from 'react-router-dom';
-import { User } from 'firebase/auth';
-import { Timestamp, FieldValue } from 'firebase/firestore';
+import type { AuthUser } from '../services/auth';
+import { GridLegacy as Grid } from '@mui/material';
+import { styled } from '@mui/material/styles';
 
 // Define the player interfaces for different rankings
 interface RankedPlayer {
@@ -50,7 +52,7 @@ interface NCAAProspect {
 }
 
 // Add a utility function to format dates safely
-const formatDate = (dateValue: Date | Timestamp | FieldValue): string => {
+const formatDate = (dateValue: any): string => {
   if (dateValue instanceof Date) {
     return dateValue.toLocaleDateString();
   }
@@ -60,9 +62,13 @@ const formatDate = (dateValue: Date | Timestamp | FieldValue): string => {
   return 'Pending';
 };
 
+const StyledGrid = styled(Grid)(({ theme }) => ({
+  width: '100%',
+}));
+
 const Dashboard = () => {
   const [loading, setLoading] = useState(true);
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [recentTrades, setRecentTrades] = useState<Trade[]>([]);
   const [topPlayers, setTopPlayers] = useState<RankedPlayer[]>([]);
   const [topQBs, setTopQBs] = useState<RankedPlayer[]>([]);
@@ -89,7 +95,8 @@ const Dashboard = () => {
   useEffect(() => {
     const loadUserData = async () => {
       try {
-        setUser(auth.currentUser);
+        const { data } = await supabase.auth.getUser();
+        setUser(data.user ? { id: data.user.id, email: data.user.email ?? undefined } : null);
         
         // Load recent trades
         const trades = await getUserTrades();
@@ -327,12 +334,11 @@ const Dashboard = () => {
 
   return (
     <Container maxWidth="lg" sx={{ mt: 4, mb: 8 }}>
-      <Grid container spacing={3}>
-        {/* Welcome Section */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+      <StyledGrid container spacing={3}>
+        <Grid container item xs={12} md={8}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', width: '100%' }}>
             <Typography variant="h4" gutterBottom>
-              Welcome, {user?.displayName || user?.email?.split('@')[0] || 'Dynasty Manager'}!
+              Welcome, {user?.email?.split('@')[0] ?? 'Dynasty Manager'}!
             </Typography>
             <Typography variant="body1">
               Manage your dynasty trades, track values, and build your championship roster.
@@ -365,43 +371,8 @@ const Dashboard = () => {
           </Paper>
         </Grid>
 
-        {/* Player Rankings Section */}
-        <Grid item xs={12}>
-          <Typography variant="h5" gutterBottom>
-            Player Rankings
-          </Typography>
-        </Grid>
-
-        {/* Top Overall Players */}
-        <Grid item xs={12} md={6}>
-          {renderRankingTable('Top 10 Overall Players', topPlayers)}
-        </Grid>
-
-        {/* Top Prospects */}
-        <Grid item xs={12} md={6}>
-          {renderProspectTable()}
-        </Grid>
-
-        {/* Position Rankings */}
-        <Grid item xs={12} sm={6} md={3}>
-          {renderRankingTable('Top 8 Quarterbacks', topQBs, false)}
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          {renderRankingTable('Top 8 Running Backs', topRBs, false)}
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          {renderRankingTable('Top 8 Wide Receivers', topWRs, false)}
-        </Grid>
-        
-        <Grid item xs={12} sm={6} md={3}>
-          {renderRankingTable('Top 8 Tight Ends', topTEs, false)}
-        </Grid>
-
-        {/* Recent Trades */}
-        <Grid item xs={12}>
-          <Paper sx={{ p: 3, display: 'flex', flexDirection: 'column' }}>
+        <Grid container item xs={12} md={4}>
+          <Paper sx={{ p: 2, display: 'flex', flexDirection: 'column', width: '100%' }}>
             <Typography variant="h5" gutterBottom>
               Recent Trades
             </Typography>
@@ -470,7 +441,37 @@ const Dashboard = () => {
             )}
           </Paper>
         </Grid>
-      </Grid>
+
+        <Grid container item xs={12}>
+          <Typography variant="h5" gutterBottom>
+            Player Rankings
+          </Typography>
+        </Grid>
+
+        <Grid container item xs={12} md={6}>
+          {renderRankingTable('Top 10 Overall Players', topPlayers)}
+        </Grid>
+
+        <Grid container item xs={12} md={6}>
+          {renderProspectTable()}
+        </Grid>
+
+        <Grid container item xs={12} sm={6} md={4}>
+          {renderRankingTable('Top 8 Quarterbacks', topQBs, false)}
+        </Grid>
+        
+        <Grid container item xs={12} sm={6} md={4}>
+          {renderRankingTable('Top 8 Running Backs', topRBs, false)}
+        </Grid>
+        
+        <Grid container item xs={12} sm={6} md={4}>
+          {renderRankingTable('Top 8 Wide Receivers', topWRs, false)}
+        </Grid>
+        
+        <Grid container item xs={12} sm={6} md={4}>
+          {renderRankingTable('Top 8 Tight Ends', topTEs, false)}
+        </Grid>
+      </StyledGrid>
     </Container>
   );
 };

@@ -14,7 +14,7 @@ import Dashboard from './pages/Dashboard';
 import TradeCalculator from './components/TradeCalculator';
 import TradeHistory from './pages/TradeHistory';
 import Navbar from './components/Navbar';
-import { User } from 'firebase/auth';
+import type { AuthUser } from './services/auth';
 import PlayerRankings from './components/PlayerRankings';
 
 const theme = createTheme({
@@ -61,7 +61,7 @@ const theme = createTheme({
 });
 
 function App() {
-  const [user, setUser] = useState<User | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

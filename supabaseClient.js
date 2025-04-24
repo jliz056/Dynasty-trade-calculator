@@ -1,8 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
-import 'dotenv/config';
 
-const supabaseUrl = process.env.SUPABASE_URL;
-const supabaseKey = process.env.SUPABASE_KEY;
+// Prefer server-side env vars but fall back to Vite client-side vars (VITE_*) when running in the browser
+const supabaseUrl = process.env.SUPABASE_URL ?? (typeof import.meta !== 'undefined' ? import.meta.env.VITE_SUPABASE_URL : undefined);
+const supabaseKey = process.env.SUPABASE_KEY ?? (typeof import.meta !== 'undefined' ? import.meta.env.VITE_SUPABASE_ANON_KEY : undefined);
 
 function createStubClient() {
   const noOp = async () => ({ data: null, error: null });

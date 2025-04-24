@@ -24,7 +24,6 @@
     "change-case": "^5.4.4",
     "csv-parser": "^3.2.0",
     "dotenv": "^16.5.0",
-    "firebase": "^11.6.0",
     "node-fetch": "^3.3.2",
     "pino": "^9.6.0",
     "react": "^19.1.0",
@@ -35,7 +34,6 @@
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",
     "@types/change-case": "^0.0.30",
-    "@types/firebase": "^3.2.3",
     "@types/node": "^22.14.1",
     "@types/react": "^19.1.2",
     "@types/react-dom": "^19.1.2",

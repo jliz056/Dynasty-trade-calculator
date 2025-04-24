@@ -1,6 +1,6 @@
 import axios from 'axios';
 // eslint-disable-next-line import/no-relative-parent-imports
-import { supabase } from '../../../../';
+import { supabase } from '../../../../supabaseClient.js';
 import pino from 'pino';
 import { IStatsProvider } from '../IStatsProvider.js';
 import { PlayerDoc } from '../types.js';

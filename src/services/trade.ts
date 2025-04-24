@@ -1,19 +1,5 @@
-import { 
-  collection, 
-  addDoc, 
-  query, 
-  where, 
-  getDocs, 
-  doc,
-  getDoc,
-  updateDoc,
-  deleteDoc,
-  serverTimestamp,
-  orderBy,
-  FieldValue,
-  Timestamp
-} from 'firebase/firestore';
-import { auth, db } from '../config/firebase';
+import { supabase } from '../../supabaseClient.js';
+import type { AuthUser } from './auth.js';
 
 export interface PlayerStats {
   position: string;
@@ -69,162 +55,167 @@ export interface Trade {
   };
 }
 
-// Utility function to safely convert timestamps
-const convertTimestamp = (value: any): Date => {
-  // Check if it's a Firebase Timestamp
-  if (value && typeof value === 'object' && 'toDate' in value) {
-    return value.toDate();
-  }
-  return new Date();
+// Helper to obtain current user (client side)
+const getCurrentUser = async (): Promise<AuthUser | null> => {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  return user
+    ? ({
+        id: user.id,
+        email: user.email ?? undefined,
+        displayName: user.user_metadata?.full_name ?? undefined,
+        photoURL: user.user_metadata?.avatar_url ?? undefined,
+      } as AuthUser)
+    : null;
 };
 
-// Save a new trade
-export const saveTrade = async (trade: Omit<Trade, 'id' | 'userId' | 'createdAt'>): Promise<Trade> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('You must be logged in to save a trade');
-  }
+const convertTimestamp = (value: any): Date => new Date(value);
 
-  try {
-    const tradeData = {
-      ...trade,
-      userId: user.uid,
-      createdAt: serverTimestamp()
-    };
-    const docRef = await addDoc(collection(db, 'trades'), tradeData);
-    return {
-      ...tradeData,
-      id: docRef.id,
-      createdAt: convertTimestamp(tradeData.createdAt)
-    };
-  } catch (error: any) {
-    console.error('Error saving trade:', error);
+// Save a new trade
+export const saveTrade = async (
+  trade: Omit<Trade, 'id' | 'userId' | 'createdAt'>,
+): Promise<Trade> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('You must be logged in to save a trade');
+
+  const insertData: any = {
+    ...trade,
+    user_id: user.id,
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { data, error } = await supabase.from('trades').insert(insertData).select('*').single();
+  if (error) {
     throw new Error(error.message || 'Failed to save trade');
   }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    title: data.title,
+    sideA: data.side_a,
+    sideB: data.side_b,
+    totalValueA: Number(data.total_value_a),
+    totalValueB: Number(data.total_value_b),
+    createdAt: convertTimestamp(data.created_at),
+    isPublic: data.is_public,
+    league: data.league ?? undefined,
+  };
 };
 
 // Get a specific trade by ID
 export const getTrade = async (tradeId: string): Promise<Trade> => {
-  try {
-    const docRef = doc(db, 'trades', tradeId);
-    const docSnap = await getDoc(docRef);
-    
-    if (docSnap.exists()) {
-      const data = docSnap.data();
-      return {
-        id: docSnap.id,
-        ...data,
-        createdAt: convertTimestamp(data.createdAt)
-      } as Trade;
-    } else {
-      throw new Error('Trade not found');
-    }
-  } catch (error: any) {
-    console.error('Error getting trade:', error);
-    throw new Error(error.message || 'Failed to get trade');
-  }
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('id', tradeId)
+    .single();
+  if (error || !data) throw new Error(error?.message || 'Trade not found');
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    title: data.title,
+    sideA: data.side_a,
+    sideB: data.side_b,
+    totalValueA: Number(data.total_value_a),
+    totalValueB: Number(data.total_value_b),
+    createdAt: convertTimestamp(data.created_at),
+    isPublic: data.is_public,
+    league: data.league ?? undefined,
+  };
 };
 
 // Get all trades for the current user
 export const getUserTrades = async (): Promise<Trade[]> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('You must be logged in to view your trades');
-  }
+  const user = await getCurrentUser();
+  if (!user) throw new Error('You must be logged in to view your trades');
 
-  try {
-    const q = query(
-      collection(db, 'trades'), 
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc: { id: any; data: () => Trade; }) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: convertTimestamp(doc.data().createdAt)
-    } as Trade));
-  } catch (error: any) {
-    console.error('Error getting user trades:', error);
-    throw new Error(error.message || 'Failed to get trades');
-  }
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('user_id', user.id)
+    .order('created_at', { ascending: false });
+
+  if (error) throw new Error(error.message || 'Failed to get trades');
+
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    sideA: row.side_a,
+    sideB: row.side_b,
+    totalValueA: Number(row.total_value_a),
+    totalValueB: Number(row.total_value_b),
+    createdAt: convertTimestamp(row.created_at),
+    isPublic: row.is_public,
+    league: row.league ?? undefined,
+  }));
 };
 
 // Get public trades for the community
 export const getPublicTrades = async (limit = 10): Promise<Trade[]> => {
-  try {
-    const q = query(
-      collection(db, 'trades'), 
-      where('isPublic', '==', true),
-      orderBy('createdAt', 'desc')
-    );
-    
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map((doc: { id: any; data: () => Trade; }) => ({
-      id: doc.id,
-      ...doc.data(),
-      createdAt: convertTimestamp(doc.data().createdAt)
-    } as Trade)).slice(0, limit);
-  } catch (error: any) {
-    console.error('Error getting public trades:', error);
-    throw new Error(error.message || 'Failed to get public trades');
-  }
+  const { data, error } = await supabase
+    .from('trades')
+    .select('*')
+    .eq('is_public', true)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message || 'Failed to get public trades');
+  return (data ?? []).map((row: any) => ({
+    id: row.id,
+    userId: row.user_id,
+    title: row.title,
+    sideA: row.side_a,
+    sideB: row.side_b,
+    totalValueA: Number(row.total_value_a),
+    totalValueB: Number(row.total_value_b),
+    createdAt: convertTimestamp(row.created_at),
+    isPublic: row.is_public,
+    league: row.league ?? undefined,
+  }));
 };
 
 // Update an existing trade
-export const updateTrade = async (tradeId: string, tradeData: Partial<Trade>): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('You must be logged in to update a trade');
-  }
+export const updateTrade = async (
+  tradeId: string,
+  tradeData: Partial<Trade>,
+): Promise<void> => {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('You must be logged in to update a trade');
 
-  try {
-    // First, verify this trade belongs to the current user
-    const tradeRef = doc(db, 'trades', tradeId);
-    const tradeSnap = await getDoc(tradeRef);
-    
-    if (!tradeSnap.exists()) {
-      throw new Error('Trade not found');
-    }
-    
-    if (tradeSnap.data().userId !== user.uid) {
-      throw new Error('You can only update your own trades');
-    }
+  const { data: existing, error: fetchErr } = await supabase
+    .from('trades')
+    .select('user_id')
+    .eq('id', tradeId)
+    .single();
+  if (fetchErr || !existing) throw new Error('Trade not found');
+  if (existing.user_id !== user.id) throw new Error('You can only update your own trades');
 
-    // Remove fields that shouldn't be updated
-    const { id, userId, createdAt, ...updatableData } = tradeData as any;
-    
-    await updateDoc(tradeRef, updatableData);
-  } catch (error: any) {
-    console.error('Error updating trade:', error);
-    throw new Error(error.message || 'Failed to update trade');
-  }
+  const { id, userId, createdAt, ...updatableData } = tradeData as any;
+
+  const { error } = await supabase
+    .from('trades')
+    .update({ ...updatableData, updated_at: new Date().toISOString() })
+    .eq('id', tradeId);
+  if (error) throw new Error(error.message || 'Failed to update trade');
 };
 
 // Delete a trade
 export const deleteTrade = async (tradeId: string): Promise<void> => {
-  const user = auth.currentUser;
-  if (!user) {
-    throw new Error('You must be logged in to delete a trade');
-  }
+  const user = await getCurrentUser();
+  if (!user) throw new Error('You must be logged in to delete a trade');
 
-  try {
-    // First, verify this trade belongs to the current user
-    const tradeRef = doc(db, 'trades', tradeId);
-    const tradeSnap = await getDoc(tradeRef);
-    
-    if (!tradeSnap.exists()) {
-      throw new Error('Trade not found');
-    }
-    
-    if (tradeSnap.data().userId !== user.uid) {
-      throw new Error('You can only delete your own trades');
-    }
+  const { data: existing, error: fetchErr } = await supabase
+    .from('trades')
+    .select('user_id')
+    .eq('id', tradeId)
+    .single();
+  if (fetchErr || !existing) throw new Error('Trade not found');
+  if (existing.user_id !== user.id) throw new Error('You can only delete your own trades');
 
-    await deleteDoc(tradeRef);
-  } catch (error: any) {
-    console.error('Error deleting trade:', error);
-    throw new Error(error.message || 'Failed to delete trade');
-  }
+  const { error } = await supabase.from('trades').delete().eq('id', tradeId);
+  if (error) throw new Error(error.message || 'Failed to delete trade');
 }; 
