@@ -5,8 +5,15 @@ import { PlayerData } from './player';
 const RAPID_API_KEY = import.meta.env.VITE_RAPID_API_KEY;
 const RAPID_API_HOST = import.meta.env.VITE_RAPID_API_HOST;
 
-if (!RAPID_API_KEY || RAPID_API_KEY === 'your_rapidapi_key') {
-  console.warn('RapidAPI Key not configured. Please add your key to the .env file.');
+// Determine if RapidAPI credentials are present
+const RAPID_API_CONFIGURED = !!(
+  RAPID_API_KEY &&
+  RAPID_API_HOST &&
+  RAPID_API_KEY !== 'your_rapidapi_key'
+);
+
+if (!RAPID_API_CONFIGURED) {
+  console.info('[nflApi] RapidAPI credentials missing – NFL endpoints will be skipped.');
 }
 
 // Cache for NFL player data
@@ -15,6 +22,9 @@ let nflStatsCache: Record<string, any> = {};
 
 // Function to fetch all NFL players
 export const fetchNFLPlayers = async (): Promise<any[]> => {
+  if (!RAPID_API_CONFIGURED) {
+    return [];
+  }
   console.log('Fetching NFL players from RapidAPI...');
   
   if (nflPlayersCache.length > 0) {
@@ -46,6 +56,9 @@ export const fetchNFLPlayers = async (): Promise<any[]> => {
 
 // Function to fetch player statistics by player ID
 export const fetchPlayerStats = async (playerId: string, season: number = 2023): Promise<any> => {
+  if (!RAPID_API_CONFIGURED) {
+    return null;
+  }
   console.log(`Fetching stats for player ${playerId} from NFL API...`);
   
   if (nflStatsCache[`${playerId}-${season}`]) {
@@ -76,6 +89,9 @@ export const fetchPlayerStats = async (playerId: string, season: number = 2023):
 
 // Function to search players by name
 export const searchNFLPlayers = async (query: string): Promise<PlayerData[]> => {
+  if (!RAPID_API_CONFIGURED) {
+    return [];
+  }
   console.log(`Searching NFL players with query: ${query}`);
   
   if (!query || query.trim().length < 2) {
@@ -119,6 +135,9 @@ export const searchNFLPlayers = async (query: string): Promise<PlayerData[]> => 
 
 // Function to get player by ID
 export const getNFLPlayerById = async (playerId: string): Promise<PlayerData | null> => {
+  if (!RAPID_API_CONFIGURED) {
+    return null;
+  }
   try {
     const allPlayers = await fetchNFLPlayers();
     const player = allPlayers.find(p => p.id === playerId);

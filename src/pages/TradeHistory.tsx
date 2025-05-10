@@ -28,11 +28,10 @@ import { useNavigate } from 'react-router-dom';
 import DeleteIcon from '@mui/icons-material/Delete';
 import EditIcon from '@mui/icons-material/Edit';
 import ShareIcon from '@mui/icons-material/Share';
-import { auth } from '../config/firebase';
-import { Timestamp, FieldValue } from 'firebase/firestore';
+import { supabase } from '../../supabaseClient.js';
 
 // Add a utility function to format dates safely
-const formatDate = (dateValue: Date | Timestamp | FieldValue): string => {
+const formatDate = (dateValue: any): string => {
   if (dateValue instanceof Date) {
     return dateValue.toLocaleDateString();
   }
@@ -55,7 +54,7 @@ const TradeHistory = () => {
   const [editIsPublic, setEditIsPublic] = useState(false);
   const [currentTab, setCurrentTab] = useState(0);
   const [newTrade, setNewTrade] = useState<Trade>({
-    userId: auth.currentUser?.uid || 'anonymous',
+    userId: 'anonymous',
     title: '',
     isPublic: false,
     league: {
@@ -166,7 +165,7 @@ const TradeHistory = () => {
           format: newTrade.league?.format || '1QB', // Provide default value
           size: newTrade.league?.size || 12 // Provide default value
         },
-        userId: auth.currentUser?.uid || 'anonymous', // Use actual user ID if available
+        userId: 'anonymous', // will be overwritten when saving
         createdAt: new Date()
       };
 
@@ -175,7 +174,7 @@ const TradeHistory = () => {
       setSuccess('Trade saved successfully!');
       setNewTrade({
         title: '',
-        userId: auth.currentUser?.uid || 'anonymous', 
+        userId: 'anonymous',
         isPublic: false,
         league: {
           name: '',

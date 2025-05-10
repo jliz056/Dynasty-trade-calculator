@@ -45,7 +45,7 @@ const Register = () => {
     try {
       setError('');
       setLoading(true);
-      await registerWithEmail(email, password);
+      await registerWithEmail(email, password, name);
       // Firebase handles the session management
     } catch (err: any) {
       console.error('Registration error:', err);

@@ -13,7 +13,7 @@ import {
   ListItemIcon,
 } from '@mui/material';
 import { Link, useNavigate } from 'react-router-dom';
-import { User } from 'firebase/auth';
+import type { AuthUser } from '../services/auth';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import HistoryIcon from '@mui/icons-material/History';
 import ExitToAppIcon from '@mui/icons-material/ExitToApp';
@@ -23,7 +23,7 @@ import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
 import { logout } from '../services/auth';
 
 interface NavbarProps {
-  user: User;
+  user: AuthUser;
 }
 
 const Navbar = ({ user }: NavbarProps) => {
