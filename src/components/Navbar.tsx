@@ -1,147 +1,85 @@
-import { useState } from 'react';
-import {
-  AppBar,
-  Toolbar,
-  Typography,
-  Button,
-  IconButton,
-  Box,
-  Menu,
-  MenuItem,
-  Avatar,
-  Divider,
-  ListItemIcon,
-} from '@mui/material';
-import { Link, useNavigate } from 'react-router-dom';
-import { User } from 'firebase/auth';
-import CalculateIcon from '@mui/icons-material/Calculate';
-import HistoryIcon from '@mui/icons-material/History';
-import ExitToAppIcon from '@mui/icons-material/ExitToApp';
-import AccountCircleIcon from '@mui/icons-material/AccountCircle';
-import DashboardIcon from '@mui/icons-material/Dashboard';
-import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
-import { logout } from '../services/auth';
+import { AppBar, Box, Button, Container, Toolbar, Typography } from '@mui/material';
+import SportsFootballIcon from '@mui/icons-material/SportsFootball';
+import LogoutIcon from '@mui/icons-material/Logout';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
 
-interface NavbarProps {
-  user: User;
-}
+const NAV_LINKS = [
+  { to: '/', label: 'Calculator' },
+  { to: '/rankings', label: 'Rankings' },
+  { to: '/draft', label: 'Draft' },
+  { to: '/leagues', label: 'My Leagues' },
+  { to: '/history', label: 'My Trades' },
+];
 
-const Navbar = ({ user }: NavbarProps) => {
-  const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
+export default function Navbar() {
+  const { user, logout } = useAuth();
+  const location = useLocation();
   const navigate = useNavigate();
-  
-  const handleMenu = (event: React.MouseEvent<HTMLElement>) => {
-    setAnchorEl(event.currentTarget);
-  };
-
-  const handleClose = () => {
-    setAnchorEl(null);
-  };
-
-  const handleLogout = async () => {
-    try {
-      await logout();
-      navigate('/login');
-    } catch (error) {
-      console.error('Error logging out:', error);
-    }
-  };
-
-  const navigationItems = [
-    { to: '/', label: 'Dashboard', icon: <DashboardIcon /> },
-    { to: '/calculator', label: 'Calculator', icon: <CalculateIcon /> },
-    { to: '/rankings', label: 'Rankings', icon: <FormatListNumberedIcon /> },
-    { to: '/history', label: 'History', icon: <HistoryIcon /> },
-  ];
 
   return (
-    <AppBar position="static">
-      <Toolbar>
-        <Typography 
-          variant="h6" 
-          component={Link} 
-          to="/"
-          sx={{ 
-            flexGrow: 1, 
-            textDecoration: 'none', 
-            color: 'inherit',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1
-          }}
-        >
-          <CalculateIcon />
-          Dynasty Trade Calculator
-        </Typography>
-        
-        <Box sx={{ display: 'flex', alignItems: 'center' }}>
-          {navigationItems.map((item) => (
-            <Button 
-              key={item.to}
-              color="inherit" 
-              component={Link} 
-              to={item.to}
-              startIcon={item.icon}
-              sx={{ mr: 1 }}
+    <AppBar
+      position="sticky"
+      elevation={0}
+      sx={{
+        bgcolor: 'rgba(11, 17, 32, 0.85)',
+        backdropFilter: 'blur(8px)',
+        borderBottom: '1px solid rgba(148, 163, 184, 0.12)',
+      }}
+    >
+      <Container maxWidth="lg">
+        <Toolbar disableGutters sx={{ gap: 1 }}>
+          <SportsFootballIcon sx={{ color: 'primary.main', mr: 1 }} />
+          <Typography
+            variant="h6"
+            component={Link}
+            to="/"
+            sx={{
+              textDecoration: 'none',
+              color: 'inherit',
+              fontWeight: 800,
+              mr: 3,
+              display: { xs: 'none', sm: 'block' },
+            }}
+          >
+            Dynasty Trade Calculator
+          </Typography>
+
+          <Box sx={{ display: 'flex', gap: 0.5, flexGrow: 1 }}>
+            {NAV_LINKS.map((link) => (
+              <Button
+                key={link.to}
+                component={Link}
+                to={link.to}
+                sx={{
+                  color: location.pathname === link.to ? 'primary.main' : 'text.secondary',
+                  fontWeight: location.pathname === link.to ? 700 : 500,
+                }}
+              >
+                {link.label}
+              </Button>
+            ))}
+          </Box>
+
+          {user ? (
+            <Button
+              color="inherit"
+              startIcon={<LogoutIcon />}
+              onClick={async () => {
+                await logout();
+                navigate('/');
+              }}
+              sx={{ color: 'text.secondary' }}
             >
-              {item.label}
+              Sign out
             </Button>
-          ))}
-          
-          <IconButton
-            size="large"
-            aria-label="account of current user"
-            aria-controls="menu-appbar"
-            aria-haspopup="true"
-            onClick={handleMenu}
-            color="inherit"
-          >
-            <Avatar 
-              sx={{ width: 32, height: 32, bgcolor: 'primary.dark' }}
-              alt={user.displayName || user.email || 'User'}
-              src={user.photoURL || undefined}
-            >
-              {(user.displayName || user.email || 'U')[0].toUpperCase()}
-            </Avatar>
-          </IconButton>
-          <Menu
-            id="menu-appbar"
-            anchorEl={anchorEl}
-            anchorOrigin={{
-              vertical: 'bottom',
-              horizontal: 'right',
-            }}
-            keepMounted
-            transformOrigin={{
-              vertical: 'top',
-              horizontal: 'right',
-            }}
-            open={Boolean(anchorEl)}
-            onClose={handleClose}
-          >
-            <MenuItem sx={{ pointerEvents: 'none' }}>
-              <Typography variant="body2">
-                {user.displayName || user.email}
-              </Typography>
-            </MenuItem>
-            <Divider />
-            <MenuItem onClick={() => { handleClose(); navigate('/profile'); }}>
-              <ListItemIcon>
-                <AccountCircleIcon fontSize="small" />
-              </ListItemIcon>
-              Profile
-            </MenuItem>
-            <MenuItem onClick={handleLogout}>
-              <ListItemIcon>
-                <ExitToAppIcon fontSize="small" />
-              </ListItemIcon>
-              Logout
-            </MenuItem>
-          </Menu>
-        </Box>
-      </Toolbar>
+          ) : (
+            <Button variant="outlined" component={Link} to="/login">
+              Sign in
+            </Button>
+          )}
+        </Toolbar>
+      </Container>
     </AppBar>
   );
-};
-
-export default Navbar; 
+}

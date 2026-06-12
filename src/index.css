@@ -1,21 +1,16 @@
-* {
+html,
+body {
   margin: 0;
   padding: 0;
-  box-sizing: border-box;
+  min-height: 100vh;
 }
 
 body {
-  font-family: 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  min-height: 100vh;
-  background-color: #121212;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% -20%, rgba(56, 189, 248, 0.12), transparent),
+    #0b1120;
 }
 
 #root {
   min-height: 100vh;
-  display: flex;
-  flex-direction: column;
-} 
+}

@@ -1,58 +1,85 @@
-import axios from 'axios';
+import { LeagueSettings } from '../types';
 
-const SLEEPER_API_BASE_URL = import.meta.env.VITE_SLEEPER_API_URL;
+const API_URL = 'https://api.sleeper.app/v1';
 
-interface SleeperPlayer {
-  player_id: string;
-  name: string;
-  position: string;
-  team: string;
-  stats: {
-    season: string;
-    games: number;
-    fantasy_points: number;
-    targets?: number;
-    receptions?: number;
-    receiving_yards?: number;
-    receiving_td?: number;
-    rushing_yards?: number;
-    rushing_td?: number;
-    passing_yards?: number;
-    passing_td?: number;
-    interceptions?: number;
-  }[];
+export interface SleeperUser {
+  user_id: string;
+  display_name: string;
+  avatar: string | null;
 }
 
-const sleeperApi = axios.create({
-  baseURL: SLEEPER_API_BASE_URL,
-});
+export interface SleeperLeague {
+  league_id: string;
+  name: string;
+  season: string;
+  status: string;
+  total_rosters: number;
+  roster_positions: string[];
+  scoring_settings: Record<string, number>;
+  avatar: string | null;
+}
 
-export const getPlayerSleeperStats = async (playerId: string): Promise<SleeperPlayer> => {
-  try {
-    const response = await sleeperApi.get(`/players/${playerId}`);
-    return response.data as SleeperPlayer;
-  } catch (error) {
-    console.error('Error fetching Sleeper player stats:', error);
-    throw new Error('Failed to fetch Sleeper player stats');
-  }
-};
+export interface SleeperRoster {
+  roster_id: number;
+  owner_id: string | null;
+  players: string[] | null;
+}
 
-export const getLeaguePlayers = async (leagueId: string): Promise<SleeperPlayer[]> => {
-  try {
-    const response = await sleeperApi.get(`/league/${leagueId}/players`);
-    return response.data as SleeperPlayer[];
-  } catch (error) {
-    console.error('Error fetching league players:', error);
-    throw new Error('Failed to fetch league players');
-  }
-};
+export interface SleeperLeagueUser {
+  user_id: string;
+  display_name: string;
+  avatar: string | null;
+  metadata?: { team_name?: string };
+}
 
-export const getPlayerStats = async (playerId: string, season: string): Promise<SleeperPlayer['stats'][0]> => {
+async function get<T>(path: string): Promise<T> {
+  const res = await fetch(API_URL + path);
+  if (res.status === 404) throw new Error('Not found');
+  if (!res.ok) throw new Error('Sleeper request failed.');
+  return res.json();
+}
+
+export async function getUser(username: string): Promise<SleeperUser> {
   try {
-    const response = await sleeperApi.get(`/players/${playerId}/stats/${season}`);
-    return response.data as SleeperPlayer['stats'][0];
-  } catch (error) {
-    console.error('Error fetching player stats:', error);
-    throw new Error('Failed to fetch player stats');
+    return await get<SleeperUser>(`/user/${encodeURIComponent(username.trim())}`);
+  } catch {
+    throw new Error(`Sleeper user "${username}" not found.`);
   }
-}; 
+}
+
+export async function getLeagues(userId: string): Promise<SleeperLeague[]> {
+  const year = new Date().getFullYear();
+  for (const season of [year, year - 1]) {
+    const leagues = await get<SleeperLeague[]>(`/user/${userId}/leagues/nfl/${season}`);
+    if (leagues.length > 0) return leagues;
+  }
+  return [];
+}
+
+export async function getLeagueData(
+  leagueId: string,
+): Promise<{ rosters: SleeperRoster[]; users: SleeperLeagueUser[] }> {
+  const [rosters, users] = await Promise.all([
+    get<SleeperRoster[]>(`/league/${leagueId}/rosters`),
+    get<SleeperLeagueUser[]>(`/league/${leagueId}/users`),
+  ]);
+  return { rosters, users };
+}
+
+export function detectLeagueSettings(league: SleeperLeague): Partial<LeagueSettings> {
+  const qbSlots = league.roster_positions.filter((p) => p === 'QB').length;
+  const hasSuperflex = league.roster_positions.includes('SUPER_FLEX');
+  const numQbs: 1 | 2 = hasSuperflex || qbSlots >= 2 ? 2 : 1;
+
+  const rec = league.scoring_settings?.rec ?? 1;
+  const ppr: 0 | 0.5 | 1 = rec >= 1 ? 1 : rec >= 0.5 ? 0.5 : 0;
+
+  const teBonus = league.scoring_settings?.bonus_rec_te ?? 0;
+  const tePremium: 0 | 0.5 | 1 = teBonus >= 1 ? 1 : teBonus >= 0.5 ? 0.5 : 0;
+
+  return { numQbs, ppr, tePremium, numTeams: league.total_rosters };
+}
+
+export function sleeperAvatarUrl(avatar: string | null): string | undefined {
+  return avatar ? `https://sleepercdn.com/avatars/thumbs/${avatar}` : undefined;
+}

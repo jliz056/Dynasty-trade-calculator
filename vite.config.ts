@@ -1,14 +1,17 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { defineConfig } from 'vite';
+import react from '@vitejs/plugin-react';
 
-// https://vitejs.dev/config/
 export default defineConfig({
   plugins: [react()],
-  define: {
-    'process.env': {
-      REACT_APP_COLLEGE_FOOTBALL_API_KEY: JSON.stringify(process.env.REACT_APP_COLLEGE_FOOTBALL_API_KEY),
-      REACT_APP_COLLEGE_FOOTBALL_API_URL: JSON.stringify(process.env.REACT_APP_COLLEGE_FOOTBALL_API_URL),
-      REACT_APP_SLEEPER_API_URL: JSON.stringify(process.env.REACT_APP_SLEEPER_API_URL)
-    }
-  }
-}) 
+  server: {
+    proxy: {
+      // KeepTradeCut has no public API and blocks cross-origin requests,
+      // so the devy rankings page is fetched through this proxy.
+      '/ktc': {
+        target: 'https://keeptradecut.com',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/ktc/, ''),
+      },
+    },
+  },
+});

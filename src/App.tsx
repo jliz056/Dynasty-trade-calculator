@@ -1,125 +1,59 @@
-import { useState, useEffect } from 'react';
-import { 
-  ThemeProvider, 
-  createTheme,
-  CssBaseline,
-  Box,
-  CircularProgress,
-} from '@mui/material';
-import { onAuthChange } from './services/auth';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
-import Login from './components/Login';
-import Register from './components/Register';
-import Dashboard from './pages/Dashboard';
-import TradeCalculator from './components/TradeCalculator';
-import TradeHistory from './pages/TradeHistory';
+import { ReactNode } from 'react';
+import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { Box, CircularProgress, Container, CssBaseline, ThemeProvider } from '@mui/material';
+import { theme } from './theme';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import { SettingsProvider } from './context/SettingsContext';
 import Navbar from './components/Navbar';
-import { User } from 'firebase/auth';
-import PlayerRankings from './components/PlayerRankings';
+import Calculator from './pages/Calculator';
+import Rankings from './pages/Rankings';
+import Draft from './pages/Draft';
+import Leagues from './pages/Leagues';
+import History from './pages/History';
+import AuthPage from './pages/AuthPage';
 
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#90caf9',
-    },
-    secondary: {
-      main: '#f48fb1',
-    },
-    background: {
-      default: '#121212',
-      paper: '#1e1e1e',
-    },
-    text: {
-      primary: '#ffffff',
-      secondary: '#b0b0b0',
-    },
-  },
-  components: {
-    MuiTextField: {
-      styleOverrides: {
-        root: {
-          '& .MuiOutlinedInput-root': {
-            '& fieldset': {
-              borderColor: 'rgba(255, 255, 255, 0.23)',
-            },
-            '&:hover fieldset': {
-              borderColor: 'rgba(255, 255, 255, 0.5)',
-            },
-          },
-        },
-      },
-    },
-    MuiPaper: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
-        },
-      },
-    },
-  },
-});
+function RequireAuth({ children }: { children: ReactNode }) {
+  const { user, loading } = useAuth();
+  if (loading) {
+    return (
+      <Box sx={{ display: 'flex', justifyContent: 'center', py: 10 }}>
+        <CircularProgress />
+      </Box>
+    );
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
-function App() {
-  const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    const unsubscribe = onAuthChange((currentUser) => {
-      setUser(currentUser);
-      setLoading(false);
-    });
-
-    return () => unsubscribe();
-  }, []);
-
+export default function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      {loading ? (
-        <Box
-          sx={{
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            height: '100vh',
-          }}
-        >
-          <CircularProgress />
-        </Box>
-      ) : (
-        <Router>
-          {user && <Navbar user={user} />}
-          <Routes>
-            <Route 
-              path="/" 
-              element={user ? <Dashboard /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/calculator" 
-              element={user ? <TradeCalculator /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/history" 
-              element={user ? <TradeHistory /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/rankings" 
-              element={user ? <PlayerRankings /> : <Navigate to="/login" />} 
-            />
-            <Route 
-              path="/login" 
-              element={!user ? <Login /> : <Navigate to="/" />} 
-            />
-            <Route 
-              path="/register" 
-              element={!user ? <Register /> : <Navigate to="/" />} 
-            />
-          </Routes>
-        </Router>
-      )}
+      <AuthProvider>
+        <SettingsProvider>
+          <BrowserRouter>
+            <Navbar />
+            <Container maxWidth="lg" sx={{ pb: 8 }}>
+              <Routes>
+                <Route path="/" element={<Calculator />} />
+                <Route path="/rankings" element={<Rankings />} />
+                <Route path="/draft" element={<Draft />} />
+                <Route path="/leagues" element={<Leagues />} />
+                <Route
+                  path="/history"
+                  element={
+                    <RequireAuth>
+                      <History />
+                    </RequireAuth>
+                  }
+                />
+                <Route path="/login" element={<AuthPage />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </Container>
+          </BrowserRouter>
+        </SettingsProvider>
+      </AuthProvider>
     </ThemeProvider>
   );
 }
-
-export default App; 
