@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "deploy:firestore": "firebase deploy --only firestore:rules"
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
