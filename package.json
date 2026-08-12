@@ -13,6 +13,9 @@
     "data:pipeline": "python data/scripts/run_pipeline.py",
     "data:values": "python data/models/baseline_values.py",
     "data:market": "python data/ingest/fantasycalc_values.py",
+    "data:draft": "python data/ingest/nflverse_draft.py",
+    "data:weekly": "python data/ingest/sleeper_weekly.py",
+    "data:backtest": "python data/models/backtest.py",
     "data:analog": "python data/models/analog_projection.py",
     "data:devy:train": "python data/models/devy_model.py train",
     "data:devy:predict": "python data/models/devy_model.py predict"

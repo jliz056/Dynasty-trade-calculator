@@ -60,6 +60,28 @@ def format_height(inches: int | None) -> str | None:
     return f"{inches // 12}'{inches % 12}\""
 
 
+def draft_compatible(
+    subject_age: int,
+    subj_round: int | None,
+    cand_round: int | None,
+    max_round_delta: int = 2,
+    age_limit: int = 25,
+) -> bool:
+    """
+    Draft capital matters most on rookie contracts: a 1st-round WR and an
+    undrafted WR with the same early production do not share a future.
+    Round 0 = undrafted (treated as round 8). None = unknown -> no filter.
+    Past `age_limit`, production speaks for itself and the filter is skipped.
+    """
+    if subject_age > age_limit:
+        return True
+    if subj_round is None or cand_round is None:
+        return True
+    subj = subj_round if subj_round > 0 else 8
+    cand = cand_round if cand_round > 0 else 8
+    return abs(subj - cand) <= max_round_delta
+
+
 def build_compatible(
     position: str,
     subj_height: int | None,

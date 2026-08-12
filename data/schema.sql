@@ -139,6 +139,92 @@ CREATE TABLE IF NOT EXISTS projections (
 CREATE INDEX IF NOT EXISTS idx_projections_player ON projections (player_id);
 CREATE INDEX IF NOT EXISTS idx_projections_model ON projections (model_version);
 
+-- Per-game stats (Sleeper weekly). Unlocks consistency metrics, partial-injury
+-- seasons, late-season trends, and (later) weather/stadium features.
+CREATE TABLE IF NOT EXISTS weekly_stats (
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  player_id       UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  season          INT NOT NULL,
+  week            INT NOT NULL,
+  team            TEXT,
+  opponent        TEXT,
+  pass_attempts   INT,
+  pass_yards      INT,
+  pass_tds        INT,
+  rush_attempts   INT,
+  rush_yards      INT,
+  rush_tds        INT,
+  targets         INT,
+  receptions      INT,
+  rec_yards       INT,
+  rec_tds         INT,
+  offensive_snaps INT,
+  fantasy_points  NUMERIC(8, 2),
+  stats_json      JSONB NOT NULL DEFAULT '{}',
+  source          data_source NOT NULL,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (player_id, season, week, source)
+);
+
+CREATE INDEX IF NOT EXISTS idx_weekly_stats_player ON weekly_stats (player_id, season);
+CREATE INDEX IF NOT EXISTS idx_weekly_stats_season_week ON weekly_stats (season, week);
+
+-- NFL combine measurements (nflverse) — sharpens build-based comparables.
+CREATE TABLE IF NOT EXISTS combine_metrics (
+  player_id       UUID PRIMARY KEY REFERENCES players(id) ON DELETE CASCADE,
+  combine_year    INT,
+  forty           NUMERIC(4, 2),
+  bench           INT,
+  vertical        NUMERIC(4, 1),
+  broad_jump      INT,
+  cone            NUMERIC(4, 2),
+  shuttle         NUMERIC(4, 2),
+  source          TEXT NOT NULL DEFAULT 'nflverse',
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Backtest: projections replayed as-of a past season vs what actually happened.
+CREATE TABLE IF NOT EXISTS backtest_results (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_version    TEXT NOT NULL,
+  as_of_season     INT NOT NULL,   -- built using only data up to this season
+  horizon_year     INT NOT NULL,
+  player_id        UUID NOT NULL REFERENCES players(id) ON DELETE CASCADE,
+  position         TEXT NOT NULL,
+  age              NUMERIC(4, 1),
+  projected_points NUMERIC(8, 2) NOT NULL,
+  low              NUMERIC(8, 2),
+  high             NUMERIC(8, 2),
+  actual_points    NUMERIC(8, 2),  -- NULL = no season played (injury/retired)
+  error            NUMERIC(8, 2),  -- projected - actual
+  in_range         BOOLEAN,        -- actual within [low, high]
+  n_analogs        INT,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (model_version, as_of_season, horizon_year, player_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_backtest_results_model
+  ON backtest_results (model_version, as_of_season, horizon_year);
+
+-- Aggregated evaluation metrics per model / backtest run / scope.
+CREATE TABLE IF NOT EXISTS model_metrics (
+  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  model_version    TEXT NOT NULL,
+  as_of_season     INT NOT NULL,
+  horizon_year     INT NOT NULL,
+  scope            TEXT NOT NULL,  -- 'ALL' or a position
+  n                INT NOT NULL,
+  mae              NUMERIC(8, 2),
+  median_abs_error NUMERIC(8, 2),
+  rmse             NUMERIC(8, 2),
+  spearman         NUMERIC(6, 4),  -- projected vs actual rank correlation
+  coverage         NUMERIC(5, 4),  -- share of actuals inside [low, high]
+  attrition        NUMERIC(5, 4),  -- share of subjects with no season at horizon
+  metadata         JSONB NOT NULL DEFAULT '{}',
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (model_version, as_of_season, horizon_year, scope)
+);
+
 -- Market value snapshots (FantasyCalc, etc.) — our own copy of crowd/market
 -- values so the app has a fallback when the API is down and so we accumulate
 -- history for trend analysis and ML features.
@@ -175,6 +261,31 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL;
 END $$;
 
+ALTER TABLE weekly_stats ENABLE ROW LEVEL SECURITY;
+ALTER TABLE combine_metrics ENABLE ROW LEVEL SECURITY;
+ALTER TABLE backtest_results ENABLE ROW LEVEL SECURITY;
+ALTER TABLE model_metrics ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY weekly_stats_read ON weekly_stats
+    FOR SELECT TO anon, authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY combine_metrics_read ON combine_metrics
+    FOR SELECT TO anon, authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY backtest_results_read ON backtest_results
+    FOR SELECT TO anon, authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+DO $$ BEGIN
+  CREATE POLICY model_metrics_read ON model_metrics
+    FOR SELECT TO anon, authenticated USING (true);
+EXCEPTION WHEN duplicate_object THEN NULL;
+END $$;
+
 -- Ingestion audit log
 CREATE TABLE IF NOT EXISTS ingest_runs (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -185,6 +296,36 @@ CREATE TABLE IF NOT EXISTS ingest_runs (
   started_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   finished_at     TIMESTAMPTZ
 );
+
+-- Our model vs the market (latest snapshot). rank_edge > 0 means our model
+-- likes the player more than the market does (potential buy target).
+CREATE OR REPLACE VIEW market_divergence AS
+WITH latest AS (
+  SELECT mv.*
+  FROM market_values mv
+  WHERE mv.snapshot_date = (SELECT max(snapshot_date) FROM market_values)
+    AND mv.position <> 'PICK'
+    AND mv.player_id IS NOT NULL
+)
+SELECT
+  dv.settings_key,
+  p.id AS player_id,
+  p.name,
+  p.position,
+  p.team,
+  dv.overall_rank AS model_rank,
+  m.overall_rank AS market_rank,
+  m.overall_rank - dv.overall_rank AS rank_edge,
+  dv.value AS model_value,
+  m.value AS market_value,
+  m.trend_30day AS market_trend_30day,
+  m.snapshot_date
+FROM dynasty_values dv
+JOIN players p ON p.id = dv.player_id
+JOIN latest m
+  ON m.player_id = dv.player_id
+ AND m.settings_key = dv.settings_key
+WHERE dv.model_version = 'baseline_v1';
 
 -- Helper view: join snapshots with player metadata for curve queries
 CREATE OR REPLACE VIEW career_curves AS

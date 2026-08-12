@@ -10,7 +10,9 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from ingest.cfbd_college import run as ingest_college
 from ingest.fantasycalc_values import run as ingest_market
 from ingest.nfl_seasons import run as ingest_nfl
+from ingest.nflverse_draft import run as ingest_draft
 from ingest.sleeper_players import run as ingest_sleeper
+from ingest.sleeper_weekly import run as ingest_weekly
 
 
 def main() -> None:
@@ -18,6 +20,17 @@ def main() -> None:
     ingest_sleeper()
     print()
     ingest_nfl()
+    print()
+    # Draft capital + combine (best-effort: models fall back gracefully).
+    try:
+        ingest_draft()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Skipping nflverse draft/combine ingest (non-fatal): {exc}")
+    print()
+    try:
+        ingest_weekly()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Skipping weekly stats ingest (non-fatal): {exc}")
     print()
     # Market snapshot is best-effort: the rest of the pipeline doesn't need it.
     try:

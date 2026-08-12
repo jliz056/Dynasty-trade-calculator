@@ -26,7 +26,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from db import get_conn, log_ingest
-from models.build_match import build_compatible
+from models.build_match import build_compatible, draft_compatible
 from models.features import to_vector  # noqa: F401  (kept for contract parity)
 
 PIPELINE = "analog_projection"
@@ -112,7 +112,7 @@ def _load_players(conn) -> dict:
             """
             SELECT
               ss.player_id, p.name, p.position, p.sleeper_id,
-              p.height_inches, p.weight_lbs,
+              p.height_inches, p.weight_lbs, p.draft_round,
               ss.season, ss.age, ss.games, ss.fantasy_points,
               ss.pass_yards, ss.pass_tds,
               ss.rush_attempts, ss.rush_yards, ss.rush_tds,
@@ -143,6 +143,7 @@ def _load_players(conn) -> dict:
                 "sleeper_id": row["sleeper_id"],
                 "height_inches": row.get("height_inches"),
                 "weight_lbs": row.get("weight_lbs"),
+                "draft_round": row.get("draft_round"),
                 "by_age": {},
             },
         )
@@ -186,26 +187,116 @@ def _dist(a: list[float], b: list[float]) -> float:
     return sum((x - y) ** 2 for x, y in zip(a, b)) ** 0.5
 
 
+def build_pool(players: dict, scalers: dict, max_season: int | None = None) -> dict:
+    """Analog pool bucketed by (position, age). With max_season, only lines
+    known at that point in time are included (for leak-free backtests)."""
+    pool: dict[tuple[str, int], list[dict]] = {}
+    for rec in players.values():
+        pos = rec["position"]
+        for age, line in rec["by_age"].items():
+            if max_season is not None and line["season"] > max_season:
+                continue
+            pool.setdefault((pos, age), []).append(
+                {
+                    "rec": rec,
+                    "age": age,
+                    "vec": _vector(line, pos, scalers),
+                    "line": line,
+                }
+            )
+    return pool
+
+
+def find_candidates(
+    rec: dict, age0: int, base: dict, pool: dict, scalers: dict
+) -> list[dict]:
+    """Nearest analogs at a similar age, with a compatible physical build and
+    (for young players) similar draft capital. Empty list = not enough analogs."""
+    pos = rec["position"]
+    base_vec = _vector(base, pos, scalers)
+    candidates = []
+    for da in range(-AGE_WINDOW, AGE_WINDOW + 1):
+        for cand in pool.get((pos, age0 + da), []):
+            if cand["rec"]["player_id"] == rec["player_id"]:
+                continue
+            if not build_compatible(
+                pos,
+                rec.get("height_inches"),
+                rec.get("weight_lbs"),
+                cand["rec"].get("height_inches"),
+                cand["rec"].get("weight_lbs"),
+            ):
+                continue
+            if not draft_compatible(
+                age0, rec.get("draft_round"), cand["rec"].get("draft_round")
+            ):
+                continue
+            candidates.append(cand)
+    if len(candidates) < MIN_ANALOGS:
+        return []
+    for cand in candidates:
+        cand["_d"] = _dist(base_vec, cand["vec"])
+    candidates.sort(key=lambda c: c["_d"])
+    return candidates[:TOP_K]
+
+
+def project_horizons(
+    base: dict, nearest: list[dict], max_season: int | None = None
+) -> dict[int, dict]:
+    """Apply the analogs' median year-over-year growth to the subject's base
+    line. Returns {horizon: {points, low, high, n, line}} where enough analogs
+    have a known future season (<= max_season when backtesting)."""
+    out: dict[int, dict] = {}
+    for h in HORIZONS:
+        fp_growth = []
+        stat_growth: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
+        stat_abs: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
+        for cand in nearest:
+            future = cand["rec"]["by_age"].get(cand["age"] + h)
+            if future is None:
+                continue
+            if max_season is not None and future["season"] > max_season:
+                continue
+            cur_fp = cand["line"]["fantasy_points"]
+            if cur_fp > 0:
+                fp_growth.append(future["fantasy_points"] / cur_fp)
+            for k in STAT_KEYS:
+                stat_abs[k].append(future.get(k, 0.0))
+                cur_v = cand["line"].get(k, 0.0)
+                if cur_v > 0:
+                    stat_growth[k].append(future.get(k, 0.0) / cur_v)
+
+        if len(fp_growth) < MIN_ANALOGS:
+            continue
+
+        base_fp = base["fantasy_points"]
+        line = {}
+        for k in STAT_KEYS:
+            base_v = base.get(k, 0.0)
+            if base_v > 0 and len(stat_growth[k]) >= MIN_ANALOGS:
+                line[k] = round(base_v * statistics.median(stat_growth[k]), 1)
+            elif stat_abs[k]:
+                line[k] = round(statistics.median(stat_abs[k]), 1)
+            else:
+                line[k] = 0.0
+
+        out[h] = {
+            "points": max(0.0, base_fp * statistics.median(fp_growth)),
+            "low": max(0.0, base_fp * _percentile(fp_growth, 0.25)),
+            "high": max(0.0, base_fp * _percentile(fp_growth, 0.75)),
+            "n": len(fp_growth),
+            "line": line,
+        }
+    return out
+
+
 def run() -> int:
     print("Building analog projections...")
     with get_conn() as conn:
         try:
             players = _load_players(conn)
             scalers = _position_scalers(players)
-
-            # Analog pool bucketed by (position, age) for fast lookup.
-            pool: dict[tuple[str, int], list[dict]] = {}
-            for rec in players.values():
-                pos = rec["position"]
-                for age, line in rec["by_age"].items():
-                    pool.setdefault((pos, age), []).append(
-                        {
-                            "rec": rec,
-                            "age": age,
-                            "vec": _vector(line, pos, scalers),
-                            "line": line,
-                        }
-                    )
+            pool = build_pool(players, scalers)
 
             # Subjects: players with a recent season; project from their latest.
             subjects = []
@@ -233,91 +324,34 @@ def run() -> int:
                 )
 
             for rec, age0, base in subjects:
-                pos = rec["position"]
-                base_vec = _vector(base, pos, scalers)
-
-                # Gather candidate analogs within the age window and similar build.
-                candidates = []
-                for da in range(-AGE_WINDOW, AGE_WINDOW + 1):
-                    for cand in pool.get((pos, age0 + da), []):
-                        if cand["rec"]["player_id"] == rec["player_id"]:
-                            continue
-                        if not build_compatible(
-                            pos,
-                            rec.get("height_inches"),
-                            rec.get("weight_lbs"),
-                            cand["rec"].get("height_inches"),
-                            cand["rec"].get("weight_lbs"),
-                        ):
-                            continue
-                        candidates.append(cand)
-                if len(candidates) < MIN_ANALOGS:
+                nearest = find_candidates(rec, age0, base, pool, scalers)
+                if not nearest:
                     continue
 
-                for cand in candidates:
-                    cand["_d"] = _dist(base_vec, cand["vec"])
-                candidates.sort(key=lambda c: c["_d"])
-                nearest = candidates[:TOP_K]
+                horizons = project_horizons(base, nearest)
+                if not horizons:
+                    continue
 
-                wrote_any = False
-                for h in HORIZONS:
-                    fp_growth = []
-                    stat_growth: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
-                    stat_abs: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
-                    for cand in nearest:
-                        future = cand["rec"]["by_age"].get(cand["age"] + h)
-                        if future is None:
-                            continue
-                        cur_fp = cand["line"]["fantasy_points"]
-                        if cur_fp > 0:
-                            fp_growth.append(future["fantasy_points"] / cur_fp)
-                        for k in STAT_KEYS:
-                            stat_abs[k].append(future.get(k, 0.0))
-                            cur_v = cand["line"].get(k, 0.0)
-                            if cur_v > 0:
-                                stat_growth[k].append(future.get(k, 0.0) / cur_v)
-
-                    if len(fp_growth) < MIN_ANALOGS:
-                        continue
-
-                    base_fp = base["fantasy_points"]
-                    proj_fp = base_fp * statistics.median(fp_growth)
-                    low_fp = base_fp * _percentile(fp_growth, 0.25)
-                    high_fp = base_fp * _percentile(fp_growth, 0.75)
-
-                    line = {}
-                    for k in STAT_KEYS:
-                        base_v = base.get(k, 0.0)
-                        if base_v > 0 and len(stat_growth[k]) >= MIN_ANALOGS:
-                            line[k] = round(base_v * statistics.median(stat_growth[k]), 1)
-                        elif stat_abs[k]:
-                            line[k] = round(statistics.median(stat_abs[k]), 1)
-                        else:
-                            line[k] = 0.0
-
+                for h, res in horizons.items():
                     proj_params.append(
                         (
                             rec["player_id"],
                             h,
-                            round(max(0.0, proj_fp), 2),
-                            round(max(0.0, low_fp), 2),
-                            round(max(0.0, high_fp), 2),
+                            round(res["points"], 2),
+                            round(res["low"], 2),
+                            round(res["high"], 2),
                             MODEL_VERSION,
                             _json(
                                 {
                                     "projected_age": age0 + h,
                                     "base_season": base["season"],
-                                    "base_points": round(base_fp, 1),
-                                    "n_analogs": len(fp_growth),
-                                    "stat_line": line,
+                                    "base_points": round(base["fantasy_points"], 1),
+                                    "n_analogs": res["n"],
+                                    "stat_line": res["line"],
                                 }
                             ),
                         )
                     )
-                    wrote_any = True
-
-                if not wrote_any:
-                    continue
                 projected += 1
 
                 # Surface the closest analogs to the UI.

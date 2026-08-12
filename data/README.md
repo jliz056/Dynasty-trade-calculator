@@ -49,12 +49,17 @@ python data/scripts/run_pipeline.py
 Or step by step:
 
 ```bash
-python data/ingest/run_all.py          # Sleeper + NFL + college
+python data/ingest/run_all.py          # Sleeper + NFL + college + draft + weekly + market
 python data/features/career_curves.py  # age-season snapshots
 python data/features/comparables.py    # historical curve matches
 python data/models/baseline_values.py  # Phase 2 formula dynasty values
 python data/models/devy_model.py all    # Phase 3 train + project devy
+python data/models/backtest.py         # leak-free eval vs what really happened
 ```
+
+Standalone ingests: `data:draft` (nflverse draft capital + combine),
+`data:weekly` (Sleeper per-game stats incl. snaps), `data:market`
+(FantasyCalc snapshot), `data:backtest` (model evaluation).
 
 ## Valuation engine
 
@@ -92,15 +97,21 @@ Models are saved to `data/models/artifacts/` (gitignored). Training needs
 
 | Table | Purpose |
 |-------|---------|
-| `players` | Registry (NFL + college), Sleeper/CFBD/GSIS IDs |
+| `players` | Registry (NFL + college), Sleeper/CFBD/GSIS IDs, draft capital |
 | `season_stats` | Raw seasonal stats by level |
+| `weekly_stats` | Per-game stats 2020+ (volume, snaps, half-PPR points) |
 | `career_snapshots` | Age-season metrics for curve analysis |
 | `player_comparables` | "Player X at 23 ≈ Player Y at 23" |
+| `combine_metrics` | NFL combine measurements (forty, vertical, ...) |
 | `projections` | Per-season projected points (baseline + ML) |
 | `dynasty_values` | Settings-aware value boards (baseline + devy) |
+| `market_values` | Daily FantasyCalc snapshots (market history) |
+| `backtest_results` | Replayed projections vs actual outcomes |
+| `model_metrics` | Aggregated eval: MAE, Spearman, coverage, attrition |
 | `ingest_runs` | Pipeline audit log |
 
-View `career_curves` joins snapshots with player metadata for queries.
+Views: `career_curves` (snapshots + metadata), `market_divergence`
+(our board vs the latest market snapshot; `rank_edge > 0` = potential buy).
 
 ## Example queries
 
@@ -140,8 +151,11 @@ ORDER BY name, age;
 
 | Pipeline | Source | Data |
 |----------|--------|------|
-| `sleeper_players` | Sleeper API | Player metadata, birth dates |
-| `nfl_seasons` | nflverse (`nfl_data_py`) | NFL seasonal stats 2021+ |
+| `sleeper_players` | Sleeper API | Player metadata, birth dates, build |
+| `nfl_seasons` | Sleeper API | NFL seasonal stats 2009+ |
+| `sleeper_weekly` | Sleeper API | Per-game stats + snaps 2020+ |
+| `nflverse_draft` | nflverse CSVs | Draft capital + combine metrics |
+| `fantasycalc_values` | FantasyCalc API | Daily market value snapshots |
 | `cfbd_college` | CollegeFootballData | College seasonal stats |
 
 ## Roadmap
