@@ -1,0 +1,28 @@
+name: Daily market snapshot
+
+# Stores today's FantasyCalc values in our Supabase market_values table.
+# Also serves as a keep-alive so the free-tier Supabase project never pauses.
+
+on:
+  schedule:
+    - cron: '0 11 * * *' # every day at 11:00 UTC (~7:00 ET)
+  workflow_dispatch: {}
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install "psycopg[binary]>=3.2" "requests>=2.32" "python-dotenv>=1.0"
+
+      - name: Snapshot FantasyCalc values
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: python data/ingest/fantasycalc_values.py
