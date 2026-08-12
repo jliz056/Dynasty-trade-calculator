@@ -10,6 +10,7 @@ import Rankings from './pages/Rankings';
 import Draft from './pages/Draft';
 import Leagues from './pages/Leagues';
 import History from './pages/History';
+import Lab from './pages/Lab';
 import AuthPage from './pages/AuthPage';
 
 function RequireAuth({ children }: { children: ReactNode }) {
@@ -39,6 +40,7 @@ export default function App() {
                 <Route path="/rankings" element={<Rankings />} />
                 <Route path="/draft" element={<Draft />} />
                 <Route path="/leagues" element={<Leagues />} />
+                <Route path="/lab" element={<Lab />} />
                 <Route
                   path="/history"
                   element={

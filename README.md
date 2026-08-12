@@ -57,6 +57,10 @@ Setup:
 2. Add the environment variable `CFB_API_KEY` (your CollegeFootballData key) in the Vercel project settings
 3. In the [Firebase console](https://console.firebase.google.com) → Firestore → Rules, paste the contents of `firestore.rules` so users can only access their own saved trades
 
+## Data pipeline (Phase 1)
+
+A PostgreSQL-backed pipeline for career curves, NFL evolution tracking, and future ML projections lives in [`data/`](data/). See [`data/README.md`](data/README.md) for setup (Supabase + Python ingest).
+
 ## Technologies Used
 
 - React 18 + TypeScript

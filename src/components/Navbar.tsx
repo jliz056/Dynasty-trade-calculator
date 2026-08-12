@@ -9,6 +9,7 @@ const NAV_LINKS = [
   { to: '/rankings', label: 'Rankings' },
   { to: '/draft', label: 'Draft' },
   { to: '/leagues', label: 'My Leagues' },
+  { to: '/lab', label: 'ML Lab' },
   { to: '/history', label: 'My Trades' },
 ];
 

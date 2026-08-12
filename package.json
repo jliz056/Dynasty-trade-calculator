@@ -7,13 +7,22 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "deploy:firestore": "firebase deploy --only firestore:rules"
+    "deploy:firestore": "firebase deploy --only firestore:rules",
+    "data:init": "python data/scripts/init_db.py",
+    "data:ingest": "python data/ingest/run_all.py",
+    "data:pipeline": "python data/scripts/run_pipeline.py",
+    "data:values": "python data/models/baseline_values.py",
+    "data:market": "python data/ingest/fantasycalc_values.py",
+    "data:analog": "python data/models/analog_projection.py",
+    "data:devy:train": "python data/models/devy_model.py train",
+    "data:devy:predict": "python data/models/devy_model.py predict"
   },
   "dependencies": {
     "@emotion/react": "^11.11.3",
     "@emotion/styled": "^11.11.0",
     "@mui/icons-material": "^5.15.13",
     "@mui/material": "^5.15.13",
+    "@supabase/supabase-js": "^2.108.2",
     "firebase": "^10.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

@@ -36,5 +36,14 @@ dist-ssr
 /dist
 
 # Coverage directory
-/coverage 
+/coverage
+
+# Python data pipeline
+data/.env
+data/.venv
+__pycache__/
+*.pyc
+
+# ML model artifacts
+data/models/artifacts/
 .vercel
