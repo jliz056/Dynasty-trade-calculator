@@ -224,6 +224,42 @@ def _season_stats_tuple(
     )
 
 
+_MARKET_VALUES_SQL = """
+    INSERT INTO market_values (
+      source, external_id, player_id, name, position, team, age,
+      sleeper_id, settings_key, value, overall_rank, position_rank,
+      trend_30day, tier
+    )
+    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+    ON CONFLICT (source, settings_key, external_id, snapshot_date)
+    DO UPDATE SET
+      player_id = EXCLUDED.player_id,
+      name = EXCLUDED.name,
+      position = EXCLUDED.position,
+      team = EXCLUDED.team,
+      age = EXCLUDED.age,
+      sleeper_id = EXCLUDED.sleeper_id,
+      value = EXCLUDED.value,
+      overall_rank = EXCLUDED.overall_rank,
+      position_rank = EXCLUDED.position_rank,
+      trend_30day = EXCLUDED.trend_30day,
+      tier = EXCLUDED.tier,
+      created_at = now()
+"""
+
+
+def upsert_market_values(conn: psycopg.Connection, params: list[tuple]) -> int:
+    """Batched market_values upsert (today's snapshot). Tuple order:
+    (source, external_id, player_id, name, position, team, age,
+     sleeper_id, settings_key, value, overall_rank, position_rank,
+     trend_30day, tier)"""
+    if not params:
+        return 0
+    with conn.cursor() as cur:
+        cur.executemany(_MARKET_VALUES_SQL, params)
+    return len(params)
+
+
 def upsert_season_stats(conn: psycopg.Connection, **kwargs: Any) -> None:
     with conn.cursor() as cur:
         cur.execute(_SEASON_STATS_SQL, _season_stats_tuple(**kwargs))

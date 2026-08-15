@@ -22,7 +22,7 @@ jobs:
       - name: Install dependencies
         run: pip install "psycopg[binary]>=3.2" "requests>=2.32" "python-dotenv>=1.0"
 
-      - name: Snapshot FantasyCalc values
+      - name: Snapshot market values (FantasyCalc + KTC + DynastyProcess)
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: python data/ingest/fantasycalc_values.py
+        run: python data/ingest/market_all.py

@@ -79,6 +79,190 @@ function ageFromBirthDate(birthDate: string | null): number | null {
   return Math.round(((Date.now() - born) / 31_557_600_000) * 10) / 10;
 }
 
+export interface DivergenceRow {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
+  modelRank: number;
+  marketRank: number;
+  rankEdge: number;
+  modelValue: number;
+  marketValue: number;
+}
+
+/**
+ * Our board vs the latest FantasyCalc snapshot (market_divergence view).
+ * rankEdge > 0 = our model likes the player more than the market (buy signal).
+ */
+export async function fetchDivergence(
+  settings: LeagueSettings,
+): Promise<DivergenceRow[]> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase
+    .from('market_divergence')
+    .select('player_id, name, position, team, model_rank, market_rank, rank_edge, model_value, market_value')
+    .eq('settings_key', settingsKey(settings))
+    .order('market_rank')
+    .limit(400);
+  if (error) throw new Error('Could not load divergence data.');
+  return (data ?? []).map((r) => ({
+    playerId: r.player_id as string,
+    name: r.name as string,
+    position: r.position as string,
+    team: (r.team as string | null) ?? null,
+    modelRank: Number(r.model_rank),
+    marketRank: Number(r.market_rank),
+    rankEdge: Number(r.rank_edge),
+    modelValue: Number(r.model_value),
+    marketValue: Number(r.market_value),
+  }));
+}
+
+export interface BacktestMetric {
+  horizon: number;
+  scope: string;
+  n: number;
+  mae: number;
+  medianAbsError: number;
+  spearman: number;
+  coverage: number;
+  attrition: number;
+}
+
+/**
+ * Backtest quality pooled across all as-of seasons (weighted by sample size).
+ */
+export async function fetchBacktestMetrics(): Promise<BacktestMetric[]> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const { data, error } = await supabase
+    .from('model_metrics')
+    .select('horizon_year, scope, n, mae, median_abs_error, spearman, coverage, attrition')
+    .eq('model_version', 'analog_v1');
+  if (error) throw new Error('Could not load model metrics.');
+
+  const groups = new Map<string, { horizon: number; scope: string; rows: typeof data }>();
+  for (const row of data ?? []) {
+    const key = `${row.horizon_year}|${row.scope}`;
+    const g = groups.get(key) ?? {
+      horizon: Number(row.horizon_year),
+      scope: row.scope as string,
+      rows: [] as typeof data,
+    };
+    g.rows.push(row);
+    groups.set(key, g);
+  }
+
+  const pooled: BacktestMetric[] = [];
+  for (const g of groups.values()) {
+    const totalN = g.rows.reduce((s, r) => s + Number(r.n), 0);
+    if (!totalN) continue;
+    const wavg = (field: string) =>
+      g.rows.reduce((s, r) => s + Number((r as never)[field] ?? 0) * Number(r.n), 0) /
+      totalN;
+    pooled.push({
+      horizon: g.horizon,
+      scope: g.scope,
+      n: totalN,
+      mae: wavg('mae'),
+      medianAbsError: wavg('median_abs_error'),
+      spearman: wavg('spearman'),
+      coverage: wavg('coverage'),
+      attrition: wavg('attrition'),
+    });
+  }
+  return pooled.sort((a, b) => a.horizon - b.horizon || a.scope.localeCompare(b.scope));
+}
+
+export const MARKET_SOURCES = ['fantasycalc', 'ktc', 'dynastyprocess'] as const;
+export type MarketSource = (typeof MARKET_SOURCES)[number];
+
+export const SOURCE_LABELS: Record<MarketSource, string> = {
+  fantasycalc: 'FantasyCalc',
+  ktc: 'KeepTradeCut',
+  dynastyprocess: 'DynastyProcess',
+};
+
+export interface CrossSiteRow {
+  playerId: string;
+  name: string;
+  position: string;
+  team: string | null;
+  modelRank: number | null;
+  ranks: Partial<Record<MarketSource, number>>;
+  values: Partial<Record<MarketSource, number>>;
+}
+
+/**
+ * Latest snapshot of every market source side by side, joined on our player
+ * registry, plus our own model rank. Sorted by average market rank.
+ */
+export async function fetchCrossSiteComparison(
+  settings: LeagueSettings,
+): Promise<CrossSiteRow[]> {
+  if (!supabase) throw new Error('Supabase is not configured.');
+  const key = settingsKey(settings);
+
+  const sourceQueries = MARKET_SOURCES.map((source) =>
+    supabase!
+      .from('market_values')
+      .select('player_id, name, position, team, value, overall_rank, snapshot_date')
+      .eq('source', source)
+      .eq('settings_key', key)
+      .not('player_id', 'is', null)
+      .order('snapshot_date', { ascending: false })
+      .order('value', { ascending: false })
+      .limit(900),
+  );
+  const modelQuery = supabase
+    .from('dynasty_values')
+    .select('player_id, overall_rank')
+    .eq('settings_key', key)
+    .eq('model_version', 'baseline_v1')
+    .order('value', { ascending: false })
+    .limit(400);
+
+  const [sourceResults, modelResult] = await Promise.all([
+    Promise.all(sourceQueries),
+    modelQuery,
+  ]);
+
+  const modelRankById = new Map<string, number>();
+  for (const r of modelResult.data ?? []) {
+    modelRankById.set(r.player_id as string, Number(r.overall_rank));
+  }
+
+  const rows = new Map<string, CrossSiteRow>();
+  sourceResults.forEach((res, i) => {
+    const source = MARKET_SOURCES[i];
+    const data = res.data ?? [];
+    if (!data.length) return;
+    const latest = data[0].snapshot_date as string;
+    for (const r of data) {
+      if (r.snapshot_date !== latest) continue;
+      const id = r.player_id as string;
+      const row = rows.get(id) ?? {
+        playerId: id,
+        name: r.name as string,
+        position: r.position as string,
+        team: (r.team as string | null) ?? null,
+        modelRank: modelRankById.get(id) ?? null,
+        ranks: {},
+        values: {},
+      };
+      row.ranks[source] = Number(r.overall_rank);
+      row.values[source] = Number(r.value);
+      rows.set(id, row);
+    }
+  });
+
+  const avgRank = (r: CrossSiteRow) => {
+    const ranks = Object.values(r.ranks);
+    return ranks.length ? ranks.reduce((s, x) => s + x, 0) / ranks.length : 9999;
+  };
+  return [...rows.values()].sort((a, b) => avgRank(a) - avgRank(b));
+}
+
 const modelCache = new Map<string, Asset[]>();
 
 /**

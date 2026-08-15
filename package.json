@@ -12,7 +12,7 @@
     "data:ingest": "python data/ingest/run_all.py",
     "data:pipeline": "python data/scripts/run_pipeline.py",
     "data:values": "python data/models/baseline_values.py",
-    "data:market": "python data/ingest/fantasycalc_values.py",
+    "data:market": "python data/ingest/market_all.py",
     "data:draft": "python data/ingest/nflverse_draft.py",
     "data:weekly": "python data/ingest/sleeper_weekly.py",
     "data:backtest": "python data/models/backtest.py",

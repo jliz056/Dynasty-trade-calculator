@@ -20,7 +20,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from db import get_conn, log_ingest
+from db import get_conn, log_ingest, upsert_market_values
 
 PIPELINE = "fantasycalc_values"
 SOURCE = "fantasycalc"
@@ -100,33 +100,7 @@ def run() -> int:
                         )
                     )
 
-            with conn.cursor() as cur:
-                cur.executemany(
-                    """
-                    INSERT INTO market_values (
-                      source, external_id, player_id, name, position, team, age,
-                      sleeper_id, settings_key, value, overall_rank, position_rank,
-                      trend_30day, tier
-                    )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    ON CONFLICT (source, settings_key, external_id, snapshot_date)
-                    DO UPDATE SET
-                      player_id = EXCLUDED.player_id,
-                      name = EXCLUDED.name,
-                      position = EXCLUDED.position,
-                      team = EXCLUDED.team,
-                      age = EXCLUDED.age,
-                      sleeper_id = EXCLUDED.sleeper_id,
-                      value = EXCLUDED.value,
-                      overall_rank = EXCLUDED.overall_rank,
-                      position_rank = EXCLUDED.position_rank,
-                      trend_30day = EXCLUDED.trend_30day,
-                      tier = EXCLUDED.tier,
-                      created_at = now()
-                    """,
-                    params,
-                )
-            count = len(params)
+            count = upsert_market_values(conn, params)
 
             log_ingest(conn, PIPELINE, "success", count)
             print(f"Stored {count} market value rows (today's snapshot).")

@@ -8,7 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from ingest.cfbd_college import run as ingest_college
-from ingest.fantasycalc_values import run as ingest_market
+from ingest.market_all import run as ingest_market
 from ingest.nfl_seasons import run as ingest_nfl
 from ingest.nflverse_draft import run as ingest_draft
 from ingest.sleeper_players import run as ingest_sleeper
