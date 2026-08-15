@@ -347,7 +347,7 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
                       {Math.round(s.projectedPoints)} pts
                     </Typography>
                     <Typography variant="caption" color="text.secondary">
-                      {Math.round(s.low)}–{Math.round(s.high)} range
+                      {Math.round(s.low)}–{Math.round(s.high)} half-PPR
                     </Typography>
                   </Box>
                 ))}

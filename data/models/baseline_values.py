@@ -25,6 +25,7 @@ from models.age_curves import age_multiplier, projection_ratio
 from models.settings import (
     DEFAULT_SETTINGS,
     LeagueSettings,
+    apply_vorp,
     position_settings_multiplier,
     ppr_points_delta,
 )
@@ -150,7 +151,12 @@ def _write_values(conn, settings: LeagueSettings, scored: list[dict]) -> None:
                 position_counts[pos],
                 PROJECTION_YEARS,
                 MODEL_VERSION,
-                _json({"raw_value": round(row["raw_value"], 2)}),
+                _json(
+                    {
+                        "raw_value": round(row["raw_value"], 2),
+                        "replacement": row.get("replacement"),
+                    }
+                ),
             )
         )
 
@@ -264,6 +270,7 @@ def run() -> int:
                             "projections": projections,
                         }
                     )
+                scored = apply_vorp(scored, settings)
                 _write_values(conn, settings, scored)
                 if not wrote_projections:
                     _write_projections(conn, scored)
