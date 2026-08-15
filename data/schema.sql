@@ -29,9 +29,13 @@ CREATE TABLE IF NOT EXISTS players (
   draft_pick      INT,
   height_inches   INT,   -- total inches (e.g. 74 = 6'2")
   weight_lbs      INT,
+  active          BOOLEAN,  -- Sleeper active flag (false = retired/out of NFL)
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Idempotent upgrade for databases created before the column existed.
+ALTER TABLE players ADD COLUMN IF NOT EXISTS active BOOLEAN;
 
 CREATE INDEX IF NOT EXISTS idx_players_name ON players (name);
 CREATE INDEX IF NOT EXISTS idx_players_position ON players (position);

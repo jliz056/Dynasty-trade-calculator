@@ -220,7 +220,7 @@ export default function Lab() {
       .finally(() => setLoadingProd(false));
 
     const analogPromise = hasSupabase
-      ? fetchAnalogProjection(asset.sleeperId)
+      ? fetchAnalogProjection(asset.sleeperId, settings)
           .then((data) => setAnalog(data))
           .catch(() => setAnalog(null))
           .finally(() => setLoadingAnalog(false))
@@ -551,9 +551,9 @@ export default function Lab() {
               Most similar players at age {Math.round(age)}
             </Typography>
             <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-              Historical players with a similar offensive profile and frame at this age.
-              WRs are matched within ±3&quot; height; RB/TE within ±2&quot;.
-              The sparkline is each player&apos;s real fantasy-points career arc.
+              Historical career twins — most are retired, which is expected. We look
+              at what they produced at this age and the year after, not their current
+              roster status. Right-hand values are our live dynasty board.
             </Typography>
             <Stack divider={<Divider flexItem />} spacing={1}>
               {analog.comparables.map((c) => (
@@ -583,6 +583,17 @@ export default function Lab() {
                     highlightAge={age}
                     color={POSITION_COLORS[analog.position as Position] ?? '#38bdf8'}
                   />
+                  <Box sx={{ minWidth: 90, textAlign: 'right' }}>
+                    {c.modelValue != null ? (
+                      <Typography variant="caption" fontWeight={700}>
+                        #{c.modelRank} · {c.modelValue.toLocaleString()}
+                      </Typography>
+                    ) : (
+                      <Typography variant="caption" color="text.secondary">
+                        retired
+                      </Typography>
+                    )}
+                  </Box>
                 </Stack>
               ))}
             </Stack>

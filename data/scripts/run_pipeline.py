@@ -21,9 +21,11 @@ def main() -> None:
     print()
     build_comparables()
     print()
-    build_baseline_values()
-    print()
+    # Analog first: baseline ranking consumes those 1-3 year horizons so
+    # veterans are valued on remaining career, not a repeat of last season.
     build_analog_projections()
+    print()
+    build_baseline_values()
 
     # The devy ML model is optional: it needs the ML libs installed and enough
     # labeled examples. Failures here shouldn't sink the whole pipeline.

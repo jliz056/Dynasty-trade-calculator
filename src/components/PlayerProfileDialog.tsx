@@ -39,6 +39,7 @@ import {
   PlayerSeasonStats,
 } from '../services/sleeper';
 import { POSITION_COLORS } from '../theme';
+import { useSettings } from '../context/SettingsContext';
 
 interface Props {
   player: Asset | null;
@@ -108,6 +109,7 @@ function statusLabel(status: string): string {
 }
 
 export default function PlayerProfileDialog({ player, onClose }: Props) {
+  const { settings } = useSettings();
   const [panel, setPanel] = useState<Panel>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +144,7 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
       }
       if (hasSupabase) {
         tasks.push(
-          fetchAnalogProjection(player.sleeperId)
+          fetchAnalogProjection(player.sleeperId, settings)
             .then(setProjection)
             .catch(() => setProjection(null)),
         );
@@ -152,7 +154,7 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
     Promise.all(tasks)
       .catch(() => setError('Could not load player data.'))
       .finally(() => setLoading(false));
-  }, [player]);
+  }, [player, settings]);
 
   const statColumns = useMemo(() => {
     if (!player || player.position === 'PICK') return [];
@@ -304,13 +306,25 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
           </Typography>
         ) : (
           <Stack spacing={3}>
-            <Typography variant="body2" color="text.secondary">
-              ML projection from {projection.seasons[0]?.nAnalogs ?? 0} similar{' '}
-              {projection.position}s (same age + build + offensive profile).
-              {projection.baseSeason
-                ? ` Base: ${projection.baseSeason} (${Math.round(projection.basePoints ?? 0)} pts).`
-                : ''}
-            </Typography>
+            <Box>
+              <Typography variant="body2" color="text.secondary">
+                Next {projection.seasons.filter((s) => s.horizon > 0).length} seasons
+                from {projection.seasons[0]?.nAnalogs ?? 0} similar {projection.position}s
+                at the same age, build, draft capital, and production.
+                {projection.baseSeason
+                  ? ` Last season (${projection.baseSeason}): ${Math.round(projection.basePoints ?? 0)} pts — that is the starting point, not next year's projection.`
+                  : ''}
+              </Typography>
+              {projection.modelValue != null && (
+                <Chip
+                  size="small"
+                  variant="outlined"
+                  color="primary"
+                  sx={{ mt: 1 }}
+                  label={`Our dynasty rank #${projection.modelRank} · ${projection.modelValue.toLocaleString()} value`}
+                />
+              )}
+            </Box>
 
             <Box
               sx={{
@@ -342,29 +356,101 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
             {projection.comparables.length > 0 && (
               <>
                 <Divider />
-                <Typography variant="subtitle2">Similar players</Typography>
-                <Stack spacing={1}>
-                  {projection.comparables.slice(0, 8).map((c) => (
-                    <Stack key={c.playerId} direction="row" alignItems="center" spacing={2}>
-                      <Box sx={{ minWidth: 140 }}>
-                        <Typography variant="body2" fontWeight={600}>
-                          {c.name}
-                        </Typography>
-                        <Typography variant="caption" color="text.secondary">
-                          {formatBuild(c.heightInches, c.weightLbs) ?? c.position}
-                        </Typography>
-                      </Box>
-                      <Box sx={{ flex: 1 }}>
-                        <Tooltip title={`${Math.round(c.similarity * 100)}% similar`}>
-                          <LinearProgress
-                            variant="determinate"
-                            value={Math.round(c.similarity * 100)}
-                            sx={{ height: 6, borderRadius: 1 }}
-                          />
-                        </Tooltip>
-                      </Box>
-                    </Stack>
-                  ))}
+                <Typography variant="subtitle2">Career twins at this age</Typography>
+                <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 1 }}>
+                  Most are retired — that is the point. We ask: when they were{' '}
+                  {player.age ? Math.floor(player.age) : 'this age'} with a similar
+                  stat line, what happened next? Values on the right are our current
+                  dynasty board (blank = no longer in the league).
+                </Typography>
+                <Stack spacing={1.25}>
+                  {projection.comparables.slice(0, 8).map((c) => {
+                    const atAge =
+                      c.matchedAge != null
+                        ? c.arc.find((a) => Math.round(a.age) === c.matchedAge)
+                        : undefined;
+                    const nextAge =
+                      c.matchedAge != null
+                        ? c.arc.find((a) => Math.round(a.age) === c.matchedAge! + 1)
+                        : undefined;
+                    const vsSubject =
+                      atAge && projection.basePoints
+                        ? Math.round((atAge.points / projection.basePoints) * 100)
+                        : null;
+                    const valueDelta =
+                      c.modelValue != null && projection.modelValue != null
+                        ? c.modelValue - projection.modelValue
+                        : null;
+                    return (
+                      <Stack
+                        key={c.playerId}
+                        direction="row"
+                        alignItems="center"
+                        spacing={2}
+                      >
+                        <Box sx={{ minWidth: 150 }}>
+                          <Typography variant="body2" fontWeight={600}>
+                            {c.name}
+                          </Typography>
+                          <Typography variant="caption" color="text.secondary">
+                            {formatBuild(c.heightInches, c.weightLbs) ?? c.position}
+                            {vsSubject != null ? ` · ${vsSubject}% of his line` : ''}
+                          </Typography>
+                        </Box>
+                        <Box sx={{ flex: 1 }}>
+                          <Tooltip title={`${Math.round(c.similarity * 100)}% similar profile`}>
+                            <LinearProgress
+                              variant="determinate"
+                              value={Math.round(c.similarity * 100)}
+                              sx={{ height: 6, borderRadius: 1 }}
+                            />
+                          </Tooltip>
+                          {atAge && (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{ display: 'block', mt: 0.5 }}
+                            >
+                              {Math.round(atAge.points)} pts at {c.matchedAge}
+                              {nextAge
+                                ? ` → ${Math.round(nextAge.points)} the next year`
+                                : ' → no next season (retired/injured)'}
+                            </Typography>
+                          )}
+                        </Box>
+                        <Box sx={{ minWidth: 110, textAlign: 'right' }}>
+                          {c.modelValue != null ? (
+                            <Tooltip
+                              title={
+                                valueDelta != null
+                                  ? `Our board #${c.modelRank} · ${
+                                      valueDelta >= 0 ? '+' : ''
+                                    }${valueDelta.toLocaleString()} vs ${player.name}`
+                                  : `Our board rank #${c.modelRank}`
+                              }
+                            >
+                              <Chip
+                                size="small"
+                                variant="outlined"
+                                color={
+                                  valueDelta != null && valueDelta > 500
+                                    ? 'success'
+                                    : valueDelta != null && valueDelta < -500
+                                      ? 'error'
+                                      : 'default'
+                                }
+                                label={`#${c.modelRank} · ${c.modelValue.toLocaleString()}`}
+                              />
+                            </Tooltip>
+                          ) : (
+                            <Typography variant="caption" color="text.secondary">
+                              retired
+                            </Typography>
+                          )}
+                        </Box>
+                      </Stack>
+                    );
+                  })}
                 </Stack>
               </>
             )}

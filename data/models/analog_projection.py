@@ -112,7 +112,7 @@ def _load_players(conn) -> dict:
             """
             SELECT
               ss.player_id, p.name, p.position, p.sleeper_id,
-              p.height_inches, p.weight_lbs, p.draft_round,
+              p.height_inches, p.weight_lbs, p.draft_round, p.active,
               ss.season, ss.age, ss.games, ss.fantasy_points,
               ss.pass_yards, ss.pass_tds,
               ss.rush_attempts, ss.rush_yards, ss.rush_tds,
@@ -144,6 +144,7 @@ def _load_players(conn) -> dict:
                 "height_inches": row.get("height_inches"),
                 "weight_lbs": row.get("weight_lbs"),
                 "draft_round": row.get("draft_round"),
+                "active": row.get("active"),
                 "by_age": {},
             },
         )
@@ -298,9 +299,12 @@ def run() -> int:
             scalers = _position_scalers(players)
             pool = build_pool(players, scalers)
 
-            # Subjects: players with a recent season; project from their latest.
+            # Subjects: active players with a recent season (retired players
+            # stay in the analog pool but get no forward projection).
             subjects = []
             for rec in players.values():
+                if rec.get("active") is not True:
+                    continue
                 ages = rec["by_age"]
                 latest_age = max(ages)
                 latest = ages[latest_age]

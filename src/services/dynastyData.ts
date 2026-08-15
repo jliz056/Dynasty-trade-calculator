@@ -30,6 +30,9 @@ export interface Comparable {
   similarity: number;
   heightInches: number | null;
   weightLbs: number | null;
+  matchedAge: number | null;
+  modelValue: number | null;
+  modelRank: number | null;
   arc: { age: number; points: number }[];
 }
 
@@ -41,6 +44,8 @@ export interface AnalogProjection {
   weightLbs: number | null;
   baseSeason: number | null;
   basePoints: number | null;
+  modelValue: number | null;
+  modelRank: number | null;
   seasons: ProjectedSeason[];
   comparables: Comparable[];
 }
@@ -324,6 +329,7 @@ export async function fetchModelRankings(
  */
 export async function fetchAnalogProjection(
   sleeperId: string,
+  settings?: LeagueSettings,
 ): Promise<AnalogProjection | null> {
   if (!supabase) return null;
 
@@ -350,7 +356,7 @@ export async function fetchAnalogProjection(
       .order('horizon_year'),
     supabase
       .from('player_comparables')
-      .select('comparable_id, similarity')
+      .select('comparable_id, similarity, subject_age')
       .eq('subject_id', player.id)
       .eq('method', MODEL)
       .order('similarity', { ascending: false })
@@ -378,9 +384,10 @@ export async function fetchAnalogProjection(
     { name: string; position: string; heightInches: number | null; weightLbs: number | null }
   >();
   let arcsById = new Map<string, { age: number; points: number }[]>();
+  const valueById = new Map<string, { value: number; rank: number }>();
 
   if (compIds.length) {
-    const [{ data: compPlayers }, { data: snaps }] = await Promise.all([
+    const [{ data: compPlayers }, { data: snaps }, { data: valueRows }] = await Promise.all([
       supabase
         .from('players')
         .select('id, name, position, height_inches, weight_lbs')
@@ -391,7 +398,20 @@ export async function fetchAnalogProjection(
         .in('player_id', compIds)
         .eq('level', 'nfl')
         .order('age'),
+      // Our board value for the subject and any still-active comparables.
+      supabase
+        .from('dynasty_values')
+        .select('player_id, value, overall_rank')
+        .in('player_id', [player.id, ...compIds])
+        .eq('settings_key', settings ? settingsKey(settings) : '1qb-12t-1ppr-0tep')
+        .eq('model_version', 'baseline_v1'),
     ]);
+    for (const v of valueRows ?? []) {
+      valueById.set(v.player_id as string, {
+        value: Number(v.value),
+        rank: Number(v.overall_rank ?? 0),
+      });
+    }
     for (const cp of compPlayers ?? []) {
       nameById.set(cp.id as string, {
         name: cp.name,
@@ -410,6 +430,7 @@ export async function fetchAnalogProjection(
   const comparables: Comparable[] = (compRows ?? []).map((r) => {
     const id = r.comparable_id as string;
     const meta = nameById.get(id);
+    const value = valueById.get(id);
     return {
       playerId: id,
       name: meta?.name ?? 'Unknown',
@@ -417,12 +438,16 @@ export async function fetchAnalogProjection(
       similarity: Number(r.similarity),
       heightInches: meta?.heightInches ?? null,
       weightLbs: meta?.weightLbs ?? null,
+      matchedAge: r.subject_age != null ? Math.round(Number(r.subject_age)) : null,
+      modelValue: value?.value ?? null,
+      modelRank: value?.rank ?? null,
       arc: arcsById.get(id) ?? [],
     };
   });
 
   if (!seasons.length && !comparables.length) return null;
 
+  const subjectValue = valueById.get(player.id);
   return {
     playerId: player.id,
     name: player.name,
@@ -432,6 +457,8 @@ export async function fetchAnalogProjection(
     weightLbs: player.weight_lbs != null ? Number(player.weight_lbs) : null,
     baseSeason: seasons[0]?.baseSeason ?? null,
     basePoints: seasons[0]?.basePoints ?? null,
+    modelValue: subjectValue?.value ?? null,
+    modelRank: subjectValue?.rank ?? null,
     seasons,
     comparables,
   };

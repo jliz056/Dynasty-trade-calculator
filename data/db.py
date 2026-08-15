@@ -79,6 +79,7 @@ def upsert_player(
     draft_pick: int | None = None,
     height_inches: int | None = None,
     weight_lbs: int | None = None,
+    active: bool | None = None,
 ) -> uuid.UUID:
     with conn.cursor() as cur:
         cur.execute(
@@ -86,9 +87,9 @@ def upsert_player(
             INSERT INTO players (
               name, position, level, sleeper_id, cfbd_id, gsis_id, team,
               birth_date, draft_year, draft_round, draft_pick,
-              height_inches, weight_lbs, updated_at
+              height_inches, weight_lbs, active, updated_at
             )
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, now())
             ON CONFLICT (sleeper_id) WHERE sleeper_id IS NOT NULL
             DO UPDATE SET
               name = EXCLUDED.name,
@@ -103,6 +104,7 @@ def upsert_player(
               draft_pick = COALESCE(EXCLUDED.draft_pick, players.draft_pick),
               height_inches = COALESCE(EXCLUDED.height_inches, players.height_inches),
               weight_lbs = COALESCE(EXCLUDED.weight_lbs, players.weight_lbs),
+              active = COALESCE(EXCLUDED.active, players.active),
               updated_at = now()
             RETURNING id
             """,
@@ -120,6 +122,7 @@ def upsert_player(
                 draft_pick,
                 height_inches,
                 weight_lbs,
+                active,
             ),
         )
         row = cur.fetchone()

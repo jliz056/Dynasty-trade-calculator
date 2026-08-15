@@ -37,7 +37,11 @@ SCALE_TOP = 10000  # top asset ~ 10000, FantasyCalc-like scale
 
 
 def _latest_seasons(conn) -> list[dict]:
-    """Most recent NFL season per player, with age and receptions."""
+    """Most recent NFL season per player, with age and receptions.
+
+    Only players still in the league belong on a dynasty board: they must be
+    flagged active by Sleeper and have played within the last two seasons.
+    """
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -54,40 +58,74 @@ def _latest_seasons(conn) -> list[dict]:
             LEFT JOIN career_snapshots cs
               ON cs.player_id = ss.player_id AND cs.season = ss.season
             WHERE ss.level = 'nfl'
+              AND p.active IS TRUE
+              AND p.team IS NOT NULL
+              AND COALESCE(ss.games, 0) > 0
+              AND COALESCE(ss.fantasy_points, 0) > 0
+              AND ss.season >= (
+                SELECT max(season) - 1 FROM season_stats WHERE level = 'nfl'
+              )
             ORDER BY ss.player_id, ss.season DESC
             """
         )
         return cur.fetchall()
 
 
-def _project_player(row: dict, settings: LeagueSettings) -> tuple[float, list[dict]]:
-    """Return (dynasty_value_raw, per-season projection rows)."""
+def _load_analog_horizons(conn) -> dict[str, dict[int, float]]:
+    """player_id -> {horizon: projected_points} from analog_v1 (next 1-3 seasons)."""
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT player_id, horizon_year, projected_points
+            FROM projections
+            WHERE model_version = 'analog_v1' AND horizon_year BETWEEN 1 AND %s
+            """,
+            (PROJECTION_YEARS,),
+        )
+        out: dict[str, dict[int, float]] = {}
+        for r in cur.fetchall():
+            out.setdefault(r["player_id"], {})[int(r["horizon_year"])] = float(
+                r["projected_points"] or 0
+            )
+        return out
+
+
+def _project_player(
+    row: dict,
+    settings: LeagueSettings,
+    analog: dict[int, float] | None = None,
+) -> tuple[float, list[dict]]:
+    """Return (dynasty_value_raw, per-season projection rows).
+
+    Prefer analog_v1 horizons (what similar players actually did next) so a
+    38-year-old QB who just scored 350 is not valued as if he'll repeat it.
+    Fall back to the positional age curve starting *next* season (k=1..N),
+    never counting last year as a free extra dynasty season.
+    """
     pos = (row["position"] or "").upper()
-    age = float(row["age"]) if row.get("age") is not None else None
+    age = float(row["age"]) if row.get("age") is not None else 25.0
     base_points = float(row.get("fantasy_points") or 0.0)
     receptions = float(row.get("receptions") or 0.0)
-
-    # Adjust the half-PPR baseline to the league's PPR.
     base_points += ppr_points_delta(receptions, settings)
-
-    # If we have no age, assume a flat curve at the position peak.
-    if age is None:
-        age = 25.0
-
     pos_mult = position_settings_multiplier(pos, settings)
 
     raw_value = 0.0
     projections: list[dict] = []
-    for k in range(PROJECTION_YEARS):
-        ratio = projection_ratio(pos, age, k)
-        projected = base_points * ratio * pos_mult
-        raw_value += projected * (DISCOUNT ** k)
+    for k in range(1, PROJECTION_YEARS + 1):
+        if analog and k in analog:
+            projected = analog[k] * pos_mult
+            source = "analog_v1"
+        else:
+            projected = base_points * projection_ratio(pos, age, k) * pos_mult
+            source = "age_curve"
+        raw_value += projected * (DISCOUNT ** (k - 1))
         projections.append(
             {
                 "horizon_year": k,
                 "projected_points": round(projected, 2),
                 "age": round(age + k, 1),
                 "age_multiplier": round(age_multiplier(pos, age + k), 4),
+                "source": source,
             }
         )
     return raw_value, projections
@@ -149,7 +187,11 @@ def _write_projections(conn, scored: list[dict]) -> None:
                     proj["projected_points"],
                     MODEL_VERSION,
                     _json(
-                        {"age": proj["age"], "age_multiplier": proj["age_multiplier"]}
+                        {
+                          "age": proj["age"],
+                          "age_multiplier": proj["age_multiplier"],
+                          "source": proj.get("source"),
+                        }
                     ),
                 )
             )
@@ -187,12 +229,33 @@ def run() -> int:
                 log_ingest(conn, PIPELINE, "success", 0)
                 return 0
 
+            analog_by_player = _load_analog_horizons(conn)
+            analog_used = sum(1 for r in seasons if r["player_id"] in analog_by_player)
+            print(
+                f"  Ranking {len(seasons)} active players "
+                f"({analog_used} with analog projections)."
+            )
+
+            # Full rebuild: drop stale rows so players who left the pool
+            # (retired, inactive) disappear from the board.
+            with conn.cursor() as cur:
+                cur.execute(
+                    "DELETE FROM dynasty_values WHERE model_version = %s",
+                    (MODEL_VERSION,),
+                )
+                cur.execute(
+                    "DELETE FROM projections WHERE model_version = %s",
+                    (MODEL_VERSION,),
+                )
+
             # Default-settings pass also produces the shared projections.
             wrote_projections = False
             for settings in DEFAULT_SETTINGS:
                 scored = []
                 for row in seasons:
-                    raw_value, projections = _project_player(row, settings)
+                    raw_value, projections = _project_player(
+                        row, settings, analog_by_player.get(row["player_id"])
+                    )
                     scored.append(
                         {
                             "player_id": row["player_id"],

@@ -78,6 +78,7 @@ def run() -> int:
                     draft_year=_int(metadata.get("draft_year")),
                     height_inches=parse_height_inches(p.get("height")),
                     weight_lbs=parse_weight_lbs(p.get("weight")),
+                    active=bool(p.get("active")),
                 )
                 count += 1
 
