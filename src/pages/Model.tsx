@@ -188,8 +188,11 @@ export default function Model() {
   );
   const sells = useMemo(
     () =>
+      // modelRank <= 300 keeps devy prospects out: the baseline model ranks
+      // players with no NFL production near the bottom, which is a blind
+      // spot, not a sell signal.
       [...divergence]
-        .filter((r) => r.modelRank <= 150 || r.marketRank <= 60)
+        .filter((r) => r.marketRank <= 150 && r.modelRank <= 300)
         .sort((a, b) => a.rankEdge - b.rankEdge)
         .slice(0, 10),
     [divergence],
