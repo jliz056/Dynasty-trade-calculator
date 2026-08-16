@@ -13,11 +13,11 @@ export default function LeagueSettingsBar() {
   const { settings, updateSettings } = useSettings();
 
   return (
-    <Paper sx={{ p: 2 }}>
+    <Paper sx={{ p: { xs: 1.5, sm: 2 }, overflowX: 'auto' }}>
       <Stack
-        direction={{ xs: 'column', md: 'row' }}
-        spacing={3}
-        alignItems={{ xs: 'flex-start', md: 'center' }}
+        direction="row"
+        spacing={2}
+        alignItems="flex-end"
         useFlexGap
         flexWrap="wrap"
       >

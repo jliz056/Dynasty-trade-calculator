@@ -12,6 +12,8 @@ import {
   Paper,
   Stack,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { DevyPlayer } from '../services/ktcDevy';
@@ -83,6 +85,8 @@ interface Props {
 }
 
 export default function DevyPlayerDialog({ player, onClose }: Props) {
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [profile, setProfile] = useState<CollegeProfile | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -109,7 +113,7 @@ export default function DevyPlayerDialog({ player, onClose }: Props) {
   }, [player]);
 
   return (
-    <Dialog open={!!player} onClose={onClose} maxWidth="sm" fullWidth>
+    <Dialog open={!!player} onClose={onClose} maxWidth="sm" fullWidth fullScreen={fullScreen}>
       {player && (
         <>
           <DialogTitle>

@@ -15,6 +15,7 @@ export default function PlayerSearch({ assets, excludeIds, onSelect, label }: Pr
 
   return (
     <Autocomplete
+      fullWidth
       options={options}
       getOptionLabel={(o) => o.name}
       value={null}

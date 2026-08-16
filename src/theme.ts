@@ -29,6 +29,12 @@ export const theme = createTheme({
   },
   shape: { borderRadius: 12 },
   components: {
+    MuiCssBaseline: {
+      styleOverrides: {
+        html: { overflowX: 'hidden' },
+        body: { overflowX: 'hidden', overscrollBehaviorY: 'contain' },
+      },
+    },
     MuiPaper: {
       styleOverrides: {
         root: {
@@ -40,6 +46,11 @@ export const theme = createTheme({
     MuiButton: {
       styleOverrides: {
         root: { textTransform: 'none', fontWeight: 600 },
+      },
+    },
+    MuiToggleButton: {
+      styleOverrides: {
+        root: { textTransform: 'none' },
       },
     },
   },

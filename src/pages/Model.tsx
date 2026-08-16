@@ -208,7 +208,7 @@ export default function Model() {
   }
 
   return (
-    <Box sx={{ pt: 4 }}>
+    <Box sx={{ pt: { xs: 2, sm: 4 } }}>
       <Stack
         direction={{ xs: 'column', sm: 'row' }}
         justifyContent="space-between"
@@ -217,7 +217,7 @@ export default function Model() {
         sx={{ mb: 3 }}
       >
         <Box>
-          <Typography variant="h4" fontWeight={800}>
+          <Typography variant="h4" fontWeight={800} sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
             Model dashboard
           </Typography>
           <Typography color="text.secondary">

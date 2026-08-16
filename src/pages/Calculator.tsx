@@ -102,7 +102,7 @@ export default function Calculator() {
   return (
     <Stack spacing={3}>
       <Box sx={{ textAlign: 'center', pt: 2 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
           Dynasty Trade Calculator
         </Typography>
         <Typography color="text.secondary">
@@ -193,6 +193,7 @@ export default function Calculator() {
         onClose={() => setSnackbar(null)}
         message={snackbar}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        sx={{ bottom: { xs: 80, md: 24 } }}
       />
     </Stack>
   );

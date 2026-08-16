@@ -20,6 +20,8 @@ import {
   Tabs,
   Tooltip,
   Typography,
+  useMediaQuery,
+  useTheme,
 } from '@mui/material';
 import CloseIcon from '@mui/icons-material/Close';
 import { Asset, Position } from '../types';
@@ -110,6 +112,8 @@ function statusLabel(status: string): string {
 
 export default function PlayerProfileDialog({ player, onClose }: Props) {
   const { settings } = useSettings();
+  const theme = useTheme();
+  const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const [panel, setPanel] = useState<Panel>('stats');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -166,7 +170,7 @@ export default function PlayerProfileDialog({ player, onClose }: Props) {
   const posColor = POSITION_COLORS[player.position];
 
   return (
-    <Dialog open onClose={onClose} maxWidth="md" fullWidth>
+    <Dialog open onClose={onClose} maxWidth="md" fullWidth fullScreen={fullScreen}>
       <DialogTitle sx={{ pr: 6 }}>
         <Stack direction="row" spacing={2} alignItems="center">
           <AssetAvatar

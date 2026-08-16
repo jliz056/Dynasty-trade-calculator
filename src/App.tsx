@@ -35,7 +35,14 @@ export default function App() {
         <SettingsProvider>
           <BrowserRouter>
             <Navbar />
-            <Container maxWidth="lg" sx={{ pb: 8 }}>
+            <Container
+              maxWidth="lg"
+              sx={{
+                px: { xs: 1.5, sm: 3 },
+                pb: { xs: 12, md: 8 },
+                overflowX: 'hidden',
+              }}
+            >
               <Routes>
                 <Route path="/" element={<Calculator />} />
                 <Route path="/rankings" element={<Rankings />} />

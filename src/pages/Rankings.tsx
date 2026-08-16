@@ -124,7 +124,7 @@ export default function Rankings() {
   return (
     <Stack spacing={3}>
       <Box sx={{ pt: 2 }}>
-        <Typography variant="h4" gutterBottom>
+        <Typography variant="h4" gutterBottom sx={{ fontSize: { xs: '1.6rem', sm: '2.125rem' } }}>
           Player Rankings
         </Typography>
         <Typography color="text.secondary">
@@ -160,7 +160,7 @@ export default function Rankings() {
           placeholder="Search…"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          sx={{ minWidth: 220 }}
+          sx={{ minWidth: { xs: '100%', sm: 220 }, width: { xs: '100%', sm: 'auto' } }}
         />
         {!isDevy && hasSupabase && (
           <ToggleButtonGroup
@@ -224,9 +224,13 @@ export default function Rankings() {
                 <TableCell sx={{ width: 60 }}>Rank</TableCell>
                 <TableCell>Player</TableCell>
                 <TableCell>Pos</TableCell>
-                <TableCell>College</TableCell>
-                <TableCell align="right">Draft Year</TableCell>
-                <TableCell align="right">Trend</TableCell>
+                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>College</TableCell>
+                <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                  Draft Year
+                </TableCell>
+                <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  Trend
+                </TableCell>
                 <TableCell align="right">Value</TableCell>
               </TableRow>
             </TableHead>
@@ -263,9 +267,13 @@ export default function Rankings() {
                       </Typography>
                     </Stack>
                   </TableCell>
-                  <TableCell>{p.college ?? '—'}</TableCell>
-                  <TableCell align="right">{p.draftYear ?? '—'}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                    {p.college ?? '—'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                    {p.draftYear ?? '—'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
                     <TrendCell trend={p.trend} />
                   </TableCell>
                   <TableCell align="right">
@@ -286,9 +294,13 @@ export default function Rankings() {
                 <TableCell sx={{ width: 60 }}>Rank</TableCell>
                 <TableCell>Player</TableCell>
                 <TableCell>Pos</TableCell>
-                <TableCell>Team</TableCell>
-                <TableCell align="right">Age</TableCell>
-                <TableCell align="right">30-Day Trend</TableCell>
+                <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>Team</TableCell>
+                <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                  Age
+                </TableCell>
+                <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
+                  30-Day Trend
+                </TableCell>
                 <TableCell align="right">Value</TableCell>
               </TableRow>
             </TableHead>
@@ -319,9 +331,13 @@ export default function Rankings() {
                   <TableCell>
                     <PositionChip position={a.position} />
                   </TableCell>
-                  <TableCell>{a.team ?? '—'}</TableCell>
-                  <TableCell align="right">{a.age ? Math.floor(a.age) : '—'}</TableCell>
-                  <TableCell align="right">
+                  <TableCell sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                    {a.team ?? '—'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ display: { xs: 'none', sm: 'table-cell' } }}>
+                    {a.age ? Math.floor(a.age) : '—'}
+                  </TableCell>
+                  <TableCell align="right" sx={{ display: { xs: 'none', md: 'table-cell' } }}>
                     <TrendCell trend={a.trend30Day} />
                   </TableCell>
                   <TableCell align="right">
