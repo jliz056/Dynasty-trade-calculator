@@ -178,7 +178,7 @@ export default function Rankings() {
         )}
         {!isDevy && usingModel && (
           <Chip
-            label="half-PPR · VORP (rareté 1QB/SF) · NFL 2009-2025"
+            label="v2 · weekly consistency · remaining window · VORP"
             size="small"
             variant="outlined"
             color="primary"

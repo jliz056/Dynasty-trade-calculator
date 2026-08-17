@@ -22,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from db import get_conn, log_ingest
 from models.age_curves import age_multiplier, projection_ratio
+from models.build_match import remaining_career_mult, usage_value_mult
 from models.settings import (
     DEFAULT_SETTINGS,
     LeagueSettings,
@@ -29,9 +30,11 @@ from models.settings import (
     position_settings_multiplier,
     ppr_points_delta,
 )
+from models.usage import load_weekly_features
 
 PIPELINE = "baseline_values"
-MODEL_VERSION = "baseline_v1"
+MODEL_VERSION = "baseline_v2"
+ANALOG_MODEL = "analog_v2"
 PROJECTION_YEARS = 3
 DISCOUNT = 0.82  # future seasons worth less in dynasty
 SCALE_TOP = 10000  # top asset ~ 10000, FantasyCalc-like scale
@@ -79,9 +82,9 @@ def _load_analog_horizons(conn) -> dict[str, dict[int, float]]:
             """
             SELECT player_id, horizon_year, projected_points
             FROM projections
-            WHERE model_version = 'analog_v1' AND horizon_year BETWEEN 1 AND %s
+            WHERE model_version = %s AND horizon_year BETWEEN 1 AND %s
             """,
-            (PROJECTION_YEARS,),
+            (ANALOG_MODEL, PROJECTION_YEARS),
         )
         out: dict[str, dict[int, float]] = {}
         for r in cur.fetchall():
@@ -115,7 +118,7 @@ def _project_player(
     for k in range(1, PROJECTION_YEARS + 1):
         if analog and k in analog:
             projected = analog[k] * pos_mult
-            source = "analog_v1"
+            source = ANALOG_MODEL
         else:
             projected = base_points * projection_ratio(pos, age, k) * pos_mult
             source = "age_curve"
@@ -155,6 +158,8 @@ def _write_values(conn, settings: LeagueSettings, scored: list[dict]) -> None:
                     {
                         "raw_value": round(row["raw_value"], 2),
                         "replacement": row.get("replacement"),
+                        "fp_cv": row.get("fp_cv"),
+                        "late_trend": row.get("late_trend"),
                     }
                 ),
             )
@@ -236,6 +241,7 @@ def run() -> int:
                 return 0
 
             analog_by_player = _load_analog_horizons(conn)
+            usage = load_weekly_features(conn)
             analog_used = sum(1 for r in seasons if r["player_id"] in analog_by_player)
             print(
                 f"  Ranking {len(seasons)} active players "
@@ -262,12 +268,21 @@ def run() -> int:
                     raw_value, projections = _project_player(
                         row, settings, analog_by_player.get(row["player_id"])
                     )
+                    feat = usage.get((row["player_id"], int(row["season"]))) or {}
+                    raw_value *= remaining_career_mult(
+                        row["position"], float(row["age"] or 25)
+                    )
+                    raw_value *= usage_value_mult(
+                        feat.get("fp_cv"), feat.get("late_trend")
+                    )
                     scored.append(
                         {
                             "player_id": row["player_id"],
                             "position": row["position"],
                             "raw_value": raw_value,
                             "projections": projections,
+                            "fp_cv": feat.get("fp_cv"),
+                            "late_trend": feat.get("late_trend"),
                         }
                     )
                 scored = apply_vorp(scored, settings)

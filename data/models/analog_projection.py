@@ -26,11 +26,12 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from db import get_conn, log_ingest
-from models.build_match import build_compatible, draft_compatible
+from models.build_match import build_compatible, draft_compatible, forty_compatible
 from models.features import to_vector  # noqa: F401  (kept for contract parity)
+from models.usage import load_weekly_features
 
 PIPELINE = "analog_projection"
-MODEL_VERSION = "analog_v1"
+MODEL_VERSION = "analog_v2"
 SKILL = {"QB", "RB", "WR", "TE"}
 
 # Seasons that count a player as "current" (worth projecting forward).
@@ -49,6 +50,9 @@ PROFILE_KEYS = [
     "rec_yards",
     "receptions",
     "rush_attempts",
+    "fp_cv",
+    "late_trend",
+    "snap_share",
 ]
 
 # Counting stats we project a full line for (besides fantasy points).
@@ -90,6 +94,9 @@ def _statline(row: dict) -> dict:
         "receptions": _f(row.get("receptions")),
         "rec_yards": _f(row.get("rec_yards")),
         "rec_tds": _f(row.get("rec_tds")),
+        "fp_cv": 0.45,
+        "late_trend": 1.0,
+        "snap_share": 0.0,
     }
     return line
 
@@ -113,17 +120,21 @@ def _load_players(conn) -> dict:
             SELECT
               ss.player_id, p.name, p.position, p.sleeper_id,
               p.height_inches, p.weight_lbs, p.draft_round, p.active,
+              cm.forty,
               ss.season, ss.age, ss.games, ss.fantasy_points,
               ss.pass_yards, ss.pass_tds,
               ss.rush_attempts, ss.rush_yards, ss.rush_tds,
               ss.targets, ss.receptions, ss.rec_yards, ss.rec_tds
             FROM season_stats ss
             JOIN players p ON p.id = ss.player_id
+            LEFT JOIN combine_metrics cm ON cm.player_id = p.id
             WHERE ss.level = 'nfl' AND ss.age IS NOT NULL
             ORDER BY ss.player_id, ss.season
             """
         )
         rows = cur.fetchall()
+
+    usage = load_weekly_features(conn)
 
     players: dict = {}
     for row in rows:
@@ -145,11 +156,17 @@ def _load_players(conn) -> dict:
                 "weight_lbs": row.get("weight_lbs"),
                 "draft_round": row.get("draft_round"),
                 "active": row.get("active"),
+                "forty": float(row["forty"]) if row.get("forty") is not None else None,
                 "by_age": {},
             },
         )
         # Keep the higher-volume line if two seasons map to the same age.
         line = _statline(row)
+        feat = usage.get((pid, line["season"]))
+        if feat:
+            line["fp_cv"] = feat["fp_cv"]
+            line["late_trend"] = feat["late_trend"]
+            line["snap_share"] = feat["snap_share"]
         existing = rec["by_age"].get(age)
         if existing is None or line["fantasy_points"] >= existing["fantasy_points"]:
             rec["by_age"][age] = line
@@ -232,6 +249,8 @@ def find_candidates(
                 age0, rec.get("draft_round"), cand["rec"].get("draft_round")
             ):
                 continue
+            if not forty_compatible(rec.get("forty"), cand["rec"].get("forty")):
+                continue
             candidates.append(cand)
     if len(candidates) < MIN_ANALOGS:
         return []
@@ -241,16 +260,32 @@ def find_candidates(
     return candidates[:TOP_K]
 
 
+def _weighted_median(pairs: list[tuple[float, float]]) -> float:
+    """pairs of (value, weight)."""
+    if not pairs:
+        return 0.0
+    ordered = sorted(pairs, key=lambda x: x[0])
+    total = sum(w for _, w in ordered) or 1.0
+    acc = 0.0
+    for value, weight in ordered:
+        acc += weight
+        if acc >= total / 2:
+            return value
+    return ordered[-1][0]
+
+
 def project_horizons(
     base: dict, nearest: list[dict], max_season: int | None = None
 ) -> dict[int, dict]:
-    """Apply the analogs' median year-over-year growth to the subject's base
-    line. Returns {horizon: {points, low, high, n, line}} where enough analogs
-    have a known future season (<= max_season when backtesting)."""
+    """Apply the analogs' *weighted* median year-over-year growth.
+
+    Closer twins count more than distant ones — a 6'1" 4.38 WR who scored
+    like you should move the needle more than the 40th-nearest match.
+    """
     out: dict[int, dict] = {}
     for h in HORIZONS:
-        fp_growth = []
-        stat_growth: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
+        fp_pairs: list[tuple[float, float]] = []
+        stat_growth: dict[str, list[tuple[float, float]]] = {k: [] for k in STAT_KEYS}
         stat_abs: dict[str, list[float]] = {k: [] for k in STAT_KEYS}
         for cand in nearest:
             future = cand["rec"]["by_age"].get(cand["age"] + h)
@@ -258,34 +293,37 @@ def project_horizons(
                 continue
             if max_season is not None and future["season"] > max_season:
                 continue
+            w = 1.0 / (float(cand.get("_d") or 0.0) + 0.15)
             cur_fp = cand["line"]["fantasy_points"]
             if cur_fp > 0:
-                fp_growth.append(future["fantasy_points"] / cur_fp)
+                fp_pairs.append((future["fantasy_points"] / cur_fp, w))
             for k in STAT_KEYS:
                 stat_abs[k].append(future.get(k, 0.0))
                 cur_v = cand["line"].get(k, 0.0)
                 if cur_v > 0:
-                    stat_growth[k].append(future.get(k, 0.0) / cur_v)
+                    stat_growth[k].append((future.get(k, 0.0) / cur_v, w))
 
-        if len(fp_growth) < MIN_ANALOGS:
+        if len(fp_pairs) < MIN_ANALOGS:
             continue
 
         base_fp = base["fantasy_points"]
+        growths = [v for v, _ in fp_pairs]
         line = {}
         for k in STAT_KEYS:
             base_v = base.get(k, 0.0)
             if base_v > 0 and len(stat_growth[k]) >= MIN_ANALOGS:
-                line[k] = round(base_v * statistics.median(stat_growth[k]), 1)
+                line[k] = round(base_v * _weighted_median(stat_growth[k]), 1)
             elif stat_abs[k]:
                 line[k] = round(statistics.median(stat_abs[k]), 1)
             else:
                 line[k] = 0.0
 
+        med = _weighted_median(fp_pairs)
         out[h] = {
-            "points": max(0.0, base_fp * statistics.median(fp_growth)),
-            "low": max(0.0, base_fp * _percentile(fp_growth, 0.25)),
-            "high": max(0.0, base_fp * _percentile(fp_growth, 0.75)),
-            "n": len(fp_growth),
+            "points": max(0.0, base_fp * med),
+            "low": max(0.0, base_fp * _percentile(growths, 0.25)),
+            "high": max(0.0, base_fp * _percentile(growths, 0.75)),
+            "n": len(fp_pairs),
             "line": line,
         }
     return out
@@ -368,6 +406,7 @@ def run() -> int:
                             cand["rec"]["player_id"],
                             float(age0),
                             round(sim, 4),
+                            MODEL_VERSION,
                         )
                     )
 
@@ -395,7 +434,7 @@ def run() -> int:
                     INSERT INTO player_comparables (
                       subject_id, comparable_id, subject_age, similarity, method
                     )
-                    VALUES (%s, %s, %s, %s, 'analog_v1')
+                    VALUES (%s, %s, %s, %s, %s)
                     ON CONFLICT (subject_id, comparable_id, subject_age, method)
                     DO UPDATE SET similarity = EXCLUDED.similarity
                     """,

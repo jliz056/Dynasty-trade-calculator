@@ -245,7 +245,7 @@ export default function Lab() {
         <Stack direction="row" alignItems="center" spacing={1}>
           <ScienceIcon sx={{ color: 'secondary.main' }} />
           <Typography variant="h4">ML Lab</Typography>
-          <Chip label="baseline_v1" size="small" color="secondary" variant="outlined" />
+          <Chip label="baseline_v2" size="small" color="secondary" variant="outlined" />
         </Stack>
         <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
           Test the Phase 2 valuation engine live. Projections run entirely in your
@@ -463,7 +463,7 @@ export default function Lab() {
             <Stack direction="row" alignItems="center" spacing={1} sx={{ mb: 1 }}>
               <InsightsIcon sx={{ color: 'secondary.main' }} />
               <Typography variant="h6">Analog projection (ML)</Typography>
-              <Chip label="analog_v1" size="small" color="secondary" variant="outlined" />
+              <Chip label="analog_v2" size="small" color="secondary" variant="outlined" />
             </Stack>
 
             {loadingAnalog ? (

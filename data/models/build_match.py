@@ -82,6 +82,42 @@ def draft_compatible(
     return abs(subj - cand) <= max_round_delta
 
 
+def forty_compatible(
+    subj_forty: float | None,
+    cand_forty: float | None,
+    max_delta: float = 0.15,
+) -> bool:
+    """Keep speed similar when both players ran a combine 40. Skip if unknown."""
+    if subj_forty is None or cand_forty is None:
+        return True
+    return abs(float(subj_forty) - float(cand_forty)) <= max_delta
+
+
+def remaining_career_mult(position: str, age: float) -> float:
+    """Extra dynasty weight for years *after* the 3 we explicitly project.
+
+    A 22-year-old WR still has a long window past +3; a 29-year-old does not.
+    Market sites bake this in via hype; we bake it in from age + position peak.
+    """
+    pos = (position or "").upper()
+    window_end = {"QB": 33.0, "RB": 27.0, "WR": 30.0, "TE": 31.0}.get(pos, 29.0)
+    extra = min(3.0, max(0.0, window_end - age - 3.0))
+    return 1.0 + 0.06 * extra
+
+
+def usage_value_mult(fp_cv: float | None, late_trend: float | None) -> float:
+    """Startable-every-week players are worth more than boom/bust totals.
+
+    late_trend > 1 means they finished hotter than their season average —
+    the next contract / role is more likely to look like the finish.
+    """
+    cv = 0.45 if fp_cv is None else float(fp_cv)
+    late = 1.0 if late_trend is None else float(late_trend)
+    consistency = 1.0 + 0.15 * (0.45 - cv)
+    finish = 1.0 + 0.18 * (late - 1.0)
+    return max(0.82, min(1.22, consistency * finish))
+
+
 def build_compatible(
     position: str,
     subj_height: int | None,

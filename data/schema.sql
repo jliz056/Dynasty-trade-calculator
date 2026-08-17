@@ -329,7 +329,7 @@ JOIN players p ON p.id = dv.player_id
 JOIN latest m
   ON m.player_id = dv.player_id
  AND m.settings_key = dv.settings_key
-WHERE dv.model_version = 'baseline_v1';
+WHERE dv.model_version = 'baseline_v2';
 
 -- Helper view: join snapshots with player metadata for curve queries
 CREATE OR REPLACE VIEW career_curves AS

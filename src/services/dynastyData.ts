@@ -50,7 +50,7 @@ export interface AnalogProjection {
   comparables: Comparable[];
 }
 
-const MODEL = 'analog_v1';
+const MODEL = 'analog_v2';
 
 export function formatHeight(inches: number | null | undefined): string | null {
   if (inches == null) return null;
@@ -223,7 +223,7 @@ export async function fetchCrossSiteComparison(
     .from('dynasty_values')
     .select('player_id, overall_rank')
     .eq('settings_key', key)
-    .eq('model_version', 'baseline_v1')
+    .eq('model_version', 'baseline_v2')
     .order('value', { ascending: false })
     .limit(400);
 
@@ -271,7 +271,7 @@ export async function fetchCrossSiteComparison(
 const modelCache = new Map<string, Asset[]>();
 
 /**
- * Our own ranking board (model_version = 'baseline_v1'), built by the Python
+ * Our own ranking board (model_version = 'baseline_v2').
  * pipeline from real NFL production + age curves — no KTC/FantasyCalc.
  */
 export async function fetchModelRankings(
@@ -289,7 +289,7 @@ export async function fetchModelRankings(
       'value, overall_rank, position_rank, player:players!inner(name, position, team, birth_date, sleeper_id)',
     )
     .eq('settings_key', key)
-    .eq('model_version', 'baseline_v1')
+    .eq('model_version', 'baseline_v2')
     .order('value', { ascending: false })
     .limit(400);
   if (error) throw new Error('Could not load model rankings.');
@@ -404,7 +404,7 @@ export async function fetchAnalogProjection(
         .select('player_id, value, overall_rank')
         .in('player_id', [player.id, ...compIds])
         .eq('settings_key', settings ? settingsKey(settings) : '1qb-12t-1ppr-0tep')
-        .eq('model_version', 'baseline_v1'),
+        .eq('model_version', 'baseline_v2'),
     ]);
     for (const v of valueRows ?? []) {
       valueById.set(v.player_id as string, {
